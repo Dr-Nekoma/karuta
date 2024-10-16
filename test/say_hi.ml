@@ -1,1 +1,1 @@
-let () = Ast.say_hi ()
+let () = Lib.Ast.say_hi ()

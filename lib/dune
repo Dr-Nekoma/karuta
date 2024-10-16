@@ -4,7 +4,9 @@
 ; - https://dune.readthedocs.io/en/stable/dune-files.html#library
 
 (library
- (name ast)
+ (name lib)
+ (modules ast evaluator)
+ (libraries batteries)
  (package karuta))
 
 (documentation

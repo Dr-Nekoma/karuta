@@ -18,6 +18,6 @@
 (package
  (name karuta)
  (synopsis "A compiler for a statically-typed relational programming language")
- (depends ocaml dune menhir batteries)
+ (depends ocaml dune menhir (batteries (>= 3.8.0)))
  (tags
   (prolog logic compiler relational warren)))

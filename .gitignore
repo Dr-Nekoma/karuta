@@ -2,3 +2,5 @@
 _build
 *.opam
 result
+*.cmi
+*.cmo
