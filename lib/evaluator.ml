@@ -18,11 +18,18 @@ module Heap = struct
     FT.set heap index elem
 
   let empty = FT.empty
+
+  let rec initialize (heap : 'a t) (size : int) (default : 'a) =
+    if size = 0 then heap else initialize (push heap default) (size - 1) default
 end
 
 module AbstractMachine = struct
   module Cell = struct
-    type t = Structure of int | Reference of int | Functor of string * int
+    type t =
+      | Structure of int
+      | Reference of int
+      | Functor of string * int
+      | Empty
   end
 
   open Cell
@@ -59,6 +66,10 @@ module AbstractMachine = struct
     let h_register = h_register + 1 in
     { heap; registers; h_register }
 
-  let initialize () : computer =
-    { heap = Heap.empty; registers = IM.empty ~eq:( = ); h_register = 0 }
+  let initialize (heap_size : int) : computer =
+    {
+      heap = Heap.initialize Heap.empty heap_size Empty;
+      registers = IM.empty ~eq:( = );
+      h_register = 0;
+    }
 end
