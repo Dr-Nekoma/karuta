@@ -1,1 +1,4 @@
-src/_build
+# dune files
+_build
+*.opam
+result
