@@ -5,7 +5,7 @@
 
 (library
  (name lib)
- (modules ast evaluator)
+ (modules ast evaluator store)
  (libraries batteries)
  (package karuta))
 
