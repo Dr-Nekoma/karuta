@@ -73,6 +73,8 @@
 
             buildInputs = [
               ocamlPackages.menhir
+              ocamlPackages.ppx_deriving
+              ocamlPackages.ppxlib
               ocamlPackages.batteries
               # Ocaml package dependencies needed to build go here.
             ];
@@ -183,6 +185,8 @@
               ocamlPackages.ocamlformat-rpc-lib
               # Fancy REPL thing
               ocamlPackages.utop
+              ocamlPackages.ppx_deriving
+              ocamlPackages.ppxlib
             ];
 
             # Tools from packages

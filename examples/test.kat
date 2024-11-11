@@ -1,0 +1,6 @@
+father[joaquim, manuel]
+father[manuel, jubileu]
+father[manuel, alfredo]
+sibling[A, B] ->
+    father[Father, A]
+    father[Father, B]

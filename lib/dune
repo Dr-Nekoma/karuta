@@ -5,9 +5,16 @@
 
 (library
  (name lib)
- (modules ast evaluator store)
+ ;; (modules ast evaluator store)
  (libraries batteries)
- (package karuta))
+ (package karuta)
+ (preprocess (pps ppx_deriving.show ppx_deriving.std)))
+
+(ocamllex lexer)
+
+(menhir
+ (modules parser)
+ (flags --trace))
 
 (documentation
  (package karuta))
