@@ -1,11 +1,12 @@
 {
 open Parser
+open Lexing
 
 exception SyntaxError of string
 }
 
 let newline = '\r' | '\n' | "\r\n"
-let white = [' ' '\t']+ | newline
+let white = [' ' '\t']+
 
 let digit = ['0'-'9']
 let lower_letter = ['a'-'z']
@@ -17,15 +18,17 @@ let int = '-'? ['0'-'9'] ['0'-'9']*
               
 rule read =
   parse
+  | white { read lexbuf }
+  | newline { new_line lexbuf; read lexbuf }
   | ident { IDENT (Lexing.lexeme lexbuf) }
   | upper_ident { UPPER_IDENT (Lexing.lexeme lexbuf) }
   | '"'      { read_string (Buffer.create 17) lexbuf }
-  | white { read lexbuf }
-  | newline { read lexbuf }
+  | ":-" { HOLDS }
   | int { LITERAL_INT (Int32.(of_string (Lexing.lexeme lexbuf))) }
   | ',' { COMMA }
-  | '(' { LEFT_DELIM }
-  | ')' { RIGHT_DELIM }
+  | '.' { DOT }
+  | '[' { LEFT_DELIM }
+  | ']' { RIGHT_DELIM }
   | eof { EOF }
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
 
