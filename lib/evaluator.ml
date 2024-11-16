@@ -22,7 +22,9 @@ module AbstractMachine = struct
   module IM = BatIMap
 
   module Store = Store.Make (struct
+    let heap_start = 0
     let max_heap_size = 10
+    let pdl_start = max_heap_size
     let max_pdl_size = 10
   end)
 
@@ -41,7 +43,7 @@ module AbstractMachine = struct
     let structure = Structure (h_register + 1) in
     let func = Functor (functor_label, functor_arity) in
     let store =
-      Store.put func (h_register + 1) @@ Store.put structure h_register store
+      Store.heap_put func (h_register + 1) @@ Store.heap_put structure h_register store
     in
     let registers = IM.add index_of_register structure registers in
     let h_register = h_register + 2 in
@@ -50,7 +52,7 @@ module AbstractMachine = struct
   let set_variable (index_of_register : int)
       ({ store; registers; h_register; _ } as computer) =
     let reference = Reference h_register in
-    let store = Store.put reference h_register store in
+    let store = Store.heap_put reference h_register store in
     let registers = IM.add index_of_register reference registers in
     let h_register = h_register + 1 in
     { computer with store; registers; h_register }
@@ -58,12 +60,12 @@ module AbstractMachine = struct
   let set_value (index_of_register : int)
       ({ store; registers; h_register; _ } as computer) =
     let value_of_register = IM.find index_of_register registers in
-    let store = Store.put value_of_register h_register store in
+    let store = Store.heap_put value_of_register h_register store in
     let h_register = h_register + 1 in
     { computer with store; registers; h_register }
 
   let rec deref (a : int) ({ store; _ } as computer) : int =
-    let cell = Store.get store a in
+    let cell = Store.heap_get store a in
     match cell with
     | Reference value when value <> a -> deref value computer
     | _ -> a
@@ -72,15 +74,15 @@ module AbstractMachine = struct
       (index_of_register : int) ({ store; h_register; _ } as computer) :
       computer =
     let addr = deref index_of_register computer in
-    match Store.get store addr with
+    match Store.heap_get store addr with
     | Reference _ ->
         let reference = Reference h_register in
         let structure = Structure (h_register + 1) in
         let func = Functor (functor_label, functor_arity) in
         let heap =
-          Store.put reference addr
-          @@ Store.put func (h_register + 1)
-          @@ Store.put structure h_register store
+          Store.heap_put reference addr
+          @@ Store.heap_put func (h_register + 1)
+          @@ Store.heap_put structure h_register store
         in
         {
           computer with
@@ -89,7 +91,7 @@ module AbstractMachine = struct
           store = heap;
         }
     | Structure a -> (
-        match Store.get store a with
+        match Store.heap_get store a with
         | Functor (label, arity)
           when label == functor_label && arity == functor_arity ->
             { computer with s_register = a + 1; mode = Read }
@@ -101,13 +103,13 @@ module AbstractMachine = struct
       computer =
     match mode with
     | Read ->
-        let value = Store.get store s_register in
+        let value = Store.heap_get store s_register in
         let registers = IM.add index_of_register value registers in
         let s_register = s_register + 1 in
         { computer with registers; s_register }
     | Write ->
         let reference = Reference s_register in
-        let store = Store.put reference h_register store in
+        let store = Store.heap_put reference h_register store in
         let registers = IM.add index_of_register reference registers in
         let h_register = h_register + 1 in
         let s_register = s_register + 1 in
@@ -124,7 +126,7 @@ module AbstractMachine = struct
         { (unify index_of_register computer) with s_register = s_register + 1 }
     | Write ->
         let value_of_register = IM.find index_of_register registers in
-        let store = Store.put value_of_register h_register store in
+        let store = Store.heap_put value_of_register h_register store in
         let h_register = h_register + 1 in
         let s_register = s_register + 1 in
         { computer with store; h_register; s_register }
