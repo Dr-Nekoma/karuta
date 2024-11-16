@@ -10,8 +10,7 @@ module type Memory = sig
   val push : 'a -> 'a t -> 'a t
   val pop : 'a t -> 'a
   val top : 'a t -> 'a
-  val get : 'a t -> int -> 'a (* TODO: Make this get safe *)
-  val put : 'a -> int -> 'a t -> 'a t
+
   val empty : 'a t
   val initialize : 'a t -> int -> 'a -> 'a t
 
@@ -34,27 +33,30 @@ module Make (Layout : Layout) = struct
   let top = FT.last
   let get = FT.get
 
-  let put (elem : 'a) (index : int) (heap : 'a t) : 'a t =
-    FT.set heap index elem
+  let put (elem : 'a) (index : int) (mem : 'a t) : 'a t =
+    FT.set mem index elem
+
+  let limited_get (ceiling: int) (mem: 'a t) (index: int): 'a =
+    if index >= ceiling
+    then failwith "Tried reaching illegal memory region! Ceiling reached: x!"
+    else get mem index
+      
+  let limited_put (ceiling: int) (elem : 'a) (index : int) (mem : 'a t) : 'a t =
+    if index >= ceiling
+    then failwith "Tried reaching illegal memory region! Ceiling reached: x!"
+    else put elem index mem       
 
   let empty = FT.empty
 
-  let rec initialize (heap : 'a t) (size : int) (default : 'a) =
-    if size = 0 then heap else initialize (push heap default) (size - 1) default
+  let rec initialize (mem : 'a t) (size : int) (default : 'a) =
+    if size = 0 then mem else initialize (push mem default) (size - 1) default
 
-  let heap_get (mem : 'a t) (index : int) : 'a =
-    if index >= Layout.max_heap_size then failwith "Heap Max Size Reached!"
-    else FT.get mem index
+  let heap_get = limited_get Layout.max_heap_size 
 
-  let heap_put (elem : 'a) (index : int) (mem : 'a t) : 'a t =
-    if index >= Layout.max_heap_size then failwith "Heap Max Size Reached!"
-    else FT.set mem elem index
+  let heap_put = limited_put Layout.max_heap_size 
 
-  let pdl_get (mem : 'a t) (index : int) : 'a =
-    if index >= Layout.max_pdl_size then failwith "PDL Max Size Reached!"
-    else FT.get mem index
+  let pdl_get = limited_get Layout.max_pdl_size
 
-  let pdl_put (elem : 'a) (index : int) (mem : 'a t) : 'a t =
-    if index >= Layout.max_pdl_size then failwith "PDL Max Size Reached!"
-    else FT.set mem elem index
+  let pdl_put = limited_put Layout.max_pdl_size
+
 end
