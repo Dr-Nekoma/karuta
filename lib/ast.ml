@@ -5,6 +5,7 @@ type t =
   | Variable of var
   | Functor of func
   | Declaration of decl
+  | Query of func
   [@@deriving show]
 and var = { namev : tag }
   [@@deriving show]

@@ -11,12 +11,15 @@
 %token DOT
 %token HOLDS
 %token EOF
+%token QUERY
 
 %start <Ast.t list> program
 %%
 
 program:
   | declaration program
+    { ($1 :: $2) }
+  | query program
     { ($1 :: $2) }
   | EOF
     { [] }
@@ -32,6 +35,11 @@ declaration:
     { Ast.Declaration {head = functor_elem; body = []}}
   | functor_elem = functorr; HOLDS; statements = separated_nonempty_list(COMMA, functorr); DOT
     { Ast.Declaration { head = functor_elem; body = statements } }
+  ;
+
+query:
+  | functor_elem = functorr; QUERY
+    { Ast.Query functor_elem}
   ;
 
 list_identifiers:

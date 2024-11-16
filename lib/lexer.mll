@@ -22,6 +22,7 @@ rule read =
   | newline { new_line lexbuf; read lexbuf }
   | ident { IDENT (Lexing.lexeme lexbuf) }
   | upper_ident { UPPER_IDENT (Lexing.lexeme lexbuf) }
+  | '?' { QUERY }
   | '"'      { read_string (Buffer.create 17) lexbuf }
   | ":-" { HOLDS }
   | int { LITERAL_INT (Int32.(of_string (Lexing.lexeme lexbuf))) }

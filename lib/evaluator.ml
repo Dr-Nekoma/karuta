@@ -11,6 +11,7 @@ module AbstractMachine = struct
       | Structure of int
       | Reference of int
       | Functor of string * int
+      | Address of int
       | Empty
   end
 
@@ -22,15 +23,13 @@ module AbstractMachine = struct
   module IM = BatIMap
 
   module Store = Store.Make (struct
-    let heap_start = 0
-    let max_heap_size = 10
-    let pdl_start = max_heap_size
-    let max_pdl_size = 10
+    let heap_size = 100
+    let stack_size = 100
+    let trail_pdl_size = 100
   end)
 
   type computer = {
     store : Cell.t Store.t;
-    heap_size : int;
     registers : Cell.t IM.t;
     h_register : int;
     s_register : int;
@@ -64,23 +63,26 @@ module AbstractMachine = struct
     let h_register = h_register + 1 in
     { computer with store; registers; h_register }
 
-  let rec deref (a : int) ({ store; _ } as computer) : int =
+  let rec deref (a : int) store : int =
     let cell = Store.heap_get store a in
     match cell with
-    | Reference value when value <> a -> deref value computer
+    | Reference value when value <> a -> deref value store
     | _ -> a
 
+  type address = int
+  let bind (i1: address) (i2: address) (mem: Cell.t Store.t): Cell.t Store.t =
+    Store.heap_put (Reference i2) i1 mem
+  
   let get_structure ((functor_label, functor_arity) : string * int)
       (index_of_register : int) ({ store; h_register; _ } as computer) :
       computer =
-    let addr = deref index_of_register computer in
+    let addr = deref index_of_register store in
     match Store.heap_get store addr with
     | Reference _ ->
-        let reference = Reference h_register in
         let structure = Structure (h_register + 1) in
         let func = Functor (functor_label, functor_arity) in
         let heap =
-          Store.heap_put reference addr
+          bind addr h_register
           @@ Store.heap_put func (h_register + 1)
           @@ Store.heap_put structure h_register store
         in
@@ -115,15 +117,57 @@ module AbstractMachine = struct
         let s_register = s_register + 1 in
         { computer with store; registers; h_register; s_register }
 
-  let unify (_a1 : int) _computer : computer =
-    failwith "Unify is not yet implemented"
+  module Unify = struct
+    let (let*) (cell: Cell.t): (int, string) result =
+      match cell with
+      | Address addr -> Ok addr
+      | _ -> Error "Found non-address"
+    let (let+) = Result.bind
+  end
+  
+  let unify (a1 : address) (a2: address)
+        ({ store;  _ } as computer)
+      : computer =
+    let newComputer =
+          (fun s -> {computer with fail = false; store = s})
+          @@ Store.pdl_push (Address a2) 
+          @@ Store.pdl_push (Address a1) store in
+    let aux ({ store; fail; _ } as computer): computer =
+      let mutStore = ref store in
+      let mutFail = ref fail in
+      while (not (Store.pdl_empty !mutStore || !mutFail)) do
+        let (Address p1) = Store.pdl_top !mutStore in
+        mutStore := Store.pdl_pop !mutStore;
+        let (Address p2) = Store.pdl_top !mutStore in
+        mutStore := Store.pdl_pop !mutStore;
+        let d1 = deref p1 !mutStore in
+        let d2 = deref p2 !mutStore in
+        if d1 != d2
+        then
+          match (Store.get !mutStore d1, Store.get !mutStore d2) with
+          | (Reference _, _) | (_, Reference _) ->
+             mutStore := bind d1 d2 !mutStore;             
+          | (Structure v1, Structure v2) ->
+             match (Store.get !mutStore v1, Store.get !mutStore v2) with
+             | (Functor (s1, n1), Functor (s2, n2)) ->
+                if (s1 == s2) && (n1 == n2)
+                then for i = 1 to n1 do
+                       mutStore := Store.pdl_push (Address (v1 + i)) !mutStore;
+                       mutStore := Store.pdl_push (Address (v2 + i)) !mutStore;                
+                     done
+                else mutFail := true
+             | (_,_) -> failwith "Unreachable"
+        else ()
+      done;
+      {computer with store = !mutStore; fail = !mutFail}
+    in aux newComputer
 
   let unify_value (index_of_register : int)
       ({ store; registers; h_register; s_register; mode; _ } as computer) :
       computer =
     match mode with
     | Read ->
-        { (unify index_of_register computer) with s_register = s_register + 1 }
+        { (unify index_of_register s_register computer) with s_register = s_register + 1 }
     | Write ->
         let value_of_register = IM.find index_of_register registers in
         let store = Store.heap_put value_of_register h_register store in
@@ -131,10 +175,9 @@ module AbstractMachine = struct
         let s_register = s_register + 1 in
         { computer with store; h_register; s_register }
 
-  let initialize (store_size : int) (heap_size : int) : computer =
+  let initialize (store_size : int) : computer =
     {
       store = Store.initialize Store.empty store_size Empty;
-      heap_size;
       registers = IM.empty ~eq:( = );
       h_register = 0;
       s_register = 0;

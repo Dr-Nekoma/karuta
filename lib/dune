@@ -3,6 +3,10 @@
 ; - https://dune.readthedocs.io/en/stable/concepts.html#libraries
 ; - https://dune.readthedocs.io/en/stable/dune-files.html#library
 
+(env
+  (dev
+    (flags (:standard -w -8)))) 
+
 (library
  (name lib)
  (modules ast evaluator store parse parser lexer)
