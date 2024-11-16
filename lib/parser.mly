@@ -17,33 +17,29 @@
 
 program:
   | declaration program
-    {
-      ($1 :: $2) }
+    { ($1 :: $2) }
   | EOF
     { [] }
   ;
 
 functorr:
-  | functor_name = IDENT; LEFT_DELIM; identifiers = list_identifiers; RIGHT_DELIM
+  | functor_name = IDENT; LEFT_DELIM; identifiers = list_identifiers
   { ({ namef = functor_name; elements = identifiers; arity = List.length identifiers } : Ast.func) }
   ;
 
 declaration:
   | functor_elem = functorr; DOT
-    {
-      print_endline "Something!";
-      print_endline @@ Ast.show_func functor_elem;
-      print_endline "Another Something!";      
-      Ast.Declaration {head = functor_elem; body = []}}
+    { Ast.Declaration {head = functor_elem; body = []}}
   | functor_elem = functorr; HOLDS; statements = separated_nonempty_list(COMMA, functorr); DOT
     { Ast.Declaration { head = functor_elem; body = statements } }
   ;
 
 list_identifiers:
-  | IDENT { [Ast.Functor {namef = $1; elements = []; arity = 0}] }
-  | UPPER_IDENT { [Ast.Variable {namev = $1}] }
-  | list_identifiers COMMA IDENT { $1 @ [Ast.Functor {namef = $3; elements = []; arity = 0}] }
-  | list_identifiers COMMA UPPER_IDENT { $1 @ [Ast.Variable {namev = $3}] }
+  | RIGHT_DELIM { [] }
+  | UPPER_IDENT COMMA list_identifiers { Ast.Variable {namev = $1} :: $3 }
+  | IDENT COMMA list_identifiers { Ast.Functor {namef = $1; elements = []; arity = 0} :: $3 }
+  | IDENT RIGHT_DELIM { [Ast.Functor {namef = $1; elements = []; arity = 0}] }
+  | UPPER_IDENT RIGHT_DELIM { [Ast.Variable {namev = $1}] }
 
 value:
   | i = LITERAL_INT
