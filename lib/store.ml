@@ -30,7 +30,6 @@ module Make (Layout : Layout) = struct
 
   let get = FT.get
   let set = FT.set
-
     
   let mem_size = Layout.heap_size + Layout.stack_size + Layout.trail_pdl_size
 

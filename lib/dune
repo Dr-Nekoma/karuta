@@ -9,7 +9,7 @@
 
 (library
  (name lib)
- (modules ast evaluator store parse parser lexer)
+ (modules ast store machine evaluator parse parser lexer)
  (libraries batteries)
  (package karuta)
  (preprocess (pps ppx_deriving.show ppx_deriving.std)))
