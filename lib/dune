@@ -4,15 +4,17 @@
 ; - https://dune.readthedocs.io/en/stable/dune-files.html#library
 
 (env
-  (dev
-    (flags (:standard -w -8)))) 
+ (dev
+  (flags
+   (:standard -w -8))))
 
 (library
  (name lib)
- (modules ast store machine evaluator parse parser lexer)
+ (modules ast store machine compiler evaluator parse parser lexer)
  (libraries batteries)
  (package karuta)
- (preprocess (pps ppx_deriving.show ppx_deriving.std)))
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.std ppx_deriving.ord)))
 
 (ocamllex lexer)
 
