@@ -8,6 +8,7 @@ module type Memory = sig
   type 'a t
 
   (* Store Operations *)
+  val to_list : 'a t -> 'a list
   val empty : 'a t
   val initialize : 'a t -> int -> 'a -> 'a t
   val get : 'a t -> int -> 'a
@@ -28,6 +29,7 @@ module Make (Layout : Layout) = struct
 
   type 'a t = 'a FT.t
 
+  let to_list = FT.to_list
   let get = FT.get
   let set = FT.set
   let mem_size = Layout.heap_size + Layout.stack_size + Layout.trail_pdl_size

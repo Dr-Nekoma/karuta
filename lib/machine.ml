@@ -5,6 +5,7 @@ module Cell = struct
     | Functor of string * int
     | Address of int
     | Empty
+  [@@deriving show]
 end
 
 module Mode = struct
@@ -27,6 +28,11 @@ type t = {
   mode : Mode.t;
   fail : bool;
 }
+
+let show_store (store : Cell.t Store.t) : string =
+  List.fold_left
+    (fun acc elem -> acc ^ " " ^ Cell.show elem)
+    "" (Store.to_list store)
 
 let initialize () : t =
   {

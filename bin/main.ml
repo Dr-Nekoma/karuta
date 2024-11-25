@@ -16,7 +16,7 @@ let _ =
       let initialComputer = Lib.Machine.initialize () in
       let finalStore =
         Lib.Compiler.compile
-          (Lib.Compiler.initialize (), decls_queries, initialComputer.store)
+          (decls_queries, Lib.Compiler.initialize (), initialComputer.store)
       in
-      print_endline @@ Lib.Store.show finalStore;
+      print_endline @@ Lib.Machine.show_store finalStore;
       None
