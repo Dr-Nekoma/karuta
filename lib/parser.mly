@@ -46,7 +46,9 @@ list_identifiers:
   | RIGHT_DELIM { [] }
   | UPPER_IDENT COMMA list_identifiers { Ast.Variable {namev = $1} :: $3 }
   | IDENT COMMA list_identifiers { Ast.Functor {namef = $1; elements = []; arity = 0} :: $3 }
+  | functor_elem = functorr; COMMA list_identifiers { (Ast.Functor functor_elem) :: $3 }
   | IDENT RIGHT_DELIM { [Ast.Functor {namef = $1; elements = []; arity = 0}] }
+  | functor_elem = functorr; RIGHT_DELIM { [Ast.Functor functor_elem] }
   | UPPER_IDENT RIGHT_DELIM { [Ast.Variable {namev = $1}] }
 
 value:
