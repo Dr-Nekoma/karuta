@@ -14,7 +14,7 @@ let rec compile : Ast.t list * t * Cell.t Store.t -> t * Cell.t Store.t =
   | [], compiler, store -> (compiler, store)
   | [ d ], compiler, store -> (
       match d with
-      | Query _ -> (compiler, store) (* TODO: error handling *)
+      | Query f -> compile_functor f compiler store
       | Variable _ | Functor _ -> failwith "unreachable"
       | Declaration { head; body } ->
           compile_declaration head body compiler store)
@@ -27,9 +27,9 @@ and compile_loop : t -> Cell.t Store.t -> t * Cell.t Store.t =
   | Some (rest, d) -> (
       let new_compiler = { compiler with terms = rest } in
       match d with
-      | Query _ | Declaration _ -> failwith "unreachable"
+      | Declaration _ -> failwith "unreachable"
       | Variable v -> compile_variable v new_compiler store
-      | Functor f -> compile_functor f new_compiler store)
+      | Query f | Functor f -> compile_functor f new_compiler store)
 
 and compile_declaration :
     Ast.func -> Ast.func list -> t -> Cell.t Store.t -> t * Cell.t Store.t =
