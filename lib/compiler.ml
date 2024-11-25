@@ -9,15 +9,15 @@ type t = { registers : int RegisterMap.t; terms : term_queue }
 
 let initialize () : t = { registers = RegisterMap.empty; terms = FT.empty }
 
-let rec compile : Ast.t list * t * Cell.t Store.t -> Cell.t Store.t = function
-  | [], _, store -> store
+let rec compile : Ast.t list * t * Cell.t Store.t -> t * Cell.t Store.t =
+  function
+  | [], compiler, store -> (compiler, store)
   | [ d ], compiler, store -> (
       match d with
-      | Query _ -> store (* TODO: error handling *)
+      | Query _ -> (compiler, store) (* TODO: error handling *)
       | Variable _ | Functor _ -> failwith "unreachable"
       | Declaration { head; body } ->
-          let _, new_store = compile_declaration head body compiler store in
-          new_store)
+          compile_declaration head body compiler store)
   | _, _, _ -> failwith "TODO"
 
 and compile_loop : t -> Cell.t Store.t -> t * Cell.t Store.t =
