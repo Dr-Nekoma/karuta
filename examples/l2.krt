@@ -1,0 +1,5 @@
+siblings[A, B] :-
+    father[Father, A],
+    father[Father, B].
+
+father[joaquim, X]?
