@@ -30,6 +30,7 @@ end
 module IM = BatIMap
 
 module Store = Store.Make (struct
+  let code_size = 100
   let heap_size = 100
   let stack_size = 100
   let trail_pdl_size = 100
@@ -40,6 +41,7 @@ type t = {
   registers : Cell.t IM.t;
   h_register : int;
   s_register : int;
+  p_register : int;
   mode : Mode.t;
   fail : bool;
 }
@@ -53,8 +55,9 @@ let initialize () : t =
   {
     store = Store.initialize Store.empty Store.mem_size Cell.Empty;
     registers = IM.empty ~eq:( = );
-    h_register = 0;
-    s_register = 0;
+    p_register = 0;
+    h_register = Store.heap_start;
+    s_register = Store.stack_start;
     mode = Mode.Read;
     fail = false;
   }
