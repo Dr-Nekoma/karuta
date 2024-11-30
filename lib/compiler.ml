@@ -1,24 +1,83 @@
 module RegisterMap = BatMap.Make (Ast)
 module FT = BatFingerTree
+module S = BatSet
 
 type term_queue = Ast.t FT.t
+type variable_set = Ast.tag S.t
 
 open Machine
 
-type t = { registers : int RegisterMap.t; terms : term_queue }
+type t = {
+  p_register : int;
+  registers : int RegisterMap.t;
+  terms : term_queue;
+  variables : variable_set;
+}
 
-let initialize () : t = { registers = RegisterMap.empty; terms = FT.empty }
+let initialize () : t =
+  {
+    p_register = 0;
+    registers = RegisterMap.empty;
+    terms = FT.empty;
+    variables = S.empty;
+  }
 
 let rec compile : Ast.t list * t * Cell.t Store.t -> t * Cell.t Store.t =
   function
   | [], compiler, store -> (compiler, store)
-  | [ d ], compiler, store -> (
+  | d :: ds, compiler, store -> (
       match d with
       | Query f -> register_alloc_functor f compiler store
       | Variable _ | Functor _ -> failwith "unreachable"
-      | Declaration { head; body } ->
-          register_alloc_declaration head body compiler store)
-  | _, _, _ -> failwith "TODO"
+      | Declaration { head; body } as declaration ->
+          let compiler, store =
+            register_alloc_declaration head body compiler store
+          in
+          let compiler, store = generate_code (compiler, store) declaration in
+          compile (ds, compiler, store))
+
+and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
+    (value : Ast.t) : t * Cell.t Store.t =
+  let add_instruction
+      ((({ p_register; _ } as compiler), store) : t * Cell.t Store.t)
+      (instruction : Cell.instruction) : t * Cell.t Store.t =
+    let store =
+      Store.code_put (Cell.Instruction instruction) p_register store
+    in
+    ({ compiler with p_register = p_register + 1 }, store)
+  in
+  let argument_helper
+      ((({ registers; variables; _ } as compiler), store) : t * Cell.t Store.t)
+      (elem : Ast.t) : t * Cell.t Store.t =
+    let open RegisterMap in
+    let index_of_register = find elem registers in
+    match elem with
+    | Variable { namev } ->
+        let variables, instruction =
+          match S.find_opt namev variables with
+          | None -> (S.add namev variables, Cell.UnifyVariable index_of_register)
+          | Some _ -> (variables, Cell.UnifyValue index_of_register)
+        in
+        add_instruction ({ compiler with variables }, store) instruction
+    | _ ->
+        let instruction = Cell.UnifyVariable index_of_register in
+        add_instruction (compiler, store) instruction
+  in
+
+  let open RegisterMap in
+  match value with
+  | Query _ -> failwith "unreachable"
+  | Functor { namef; elements; arity } ->
+      let index_register = find value registers in
+      let instruction = Cell.GetStructure ((namef, arity), index_register) in
+      let compiler, store = add_instruction (compiler, store) instruction in
+      let compiler, store =
+        List.fold_left argument_helper (compiler, store) elements
+      in
+      List.fold_left generate_code (compiler, store) elements
+  | Variable _ -> (compiler, store)
+  | Declaration { head; _ } ->
+      generate_code (compiler, store) (Ast.Functor head)
 
 and register_alloc_loop : t -> Cell.t Store.t -> t * Cell.t Store.t =
  fun ({ terms; _ } as compiler) store ->
@@ -44,10 +103,10 @@ and register_alloc_declaration :
 and register_alloc_functor :
     Ast.func -> t -> Cell.t Store.t -> t * Cell.t Store.t =
   let open RegisterMap in
-  fun ({ elements; _ } as func) { terms; registers } store ->
-    let new_registers = add (Ast.Functor func) (cardinal registers) registers in
-    let new_terms = FT.append terms (FT.of_list elements) in
-    register_alloc_loop { registers = new_registers; terms = new_terms } store
+  fun ({ elements; _ } as func) ({ terms; registers; _ } as compiler) store ->
+    let registers = add (Ast.Functor func) (cardinal registers) registers in
+    let terms = FT.append terms (FT.of_list elements) in
+    register_alloc_loop { compiler with registers; terms } store
 
 and register_alloc_variable :
     Ast.var -> t -> Cell.t Store.t -> t * Cell.t Store.t =

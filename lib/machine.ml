@@ -46,10 +46,16 @@ type t = {
   fail : bool;
 }
 
-let show_store (store : Cell.t Store.t) : string =
+let show_store (store : Cell.t Store.t) (how_many : int option) : string =
+  let limit_list (l : 'a list) : 'a list =
+    match how_many with
+    | None -> l
+    | Some x -> List.to_seq l |> Seq.take x |> List.of_seq
+  in
   List.fold_left
     (fun acc elem -> acc ^ " " ^ Cell.show elem)
-    "" (Store.to_list store)
+    ""
+    (limit_list @@ Store.to_list store)
 
 let initialize () : t =
   {

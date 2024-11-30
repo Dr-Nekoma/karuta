@@ -44,10 +44,7 @@ module Make (Layout : Layout) = struct
     Layout.code_size + Layout.heap_size + Layout.stack_size
     + Layout.trail_pdl_size
 
-  let put (elem : 'a) (index : int) (mem : 'a t) : 'a t =
-    if index <= 0 then
-      failwith "Tried reaching illegal memory region! Ceiling reached: x!"
-    else set mem index elem
+  let put (elem : 'a) (index : int) (mem : 'a t) : 'a t = set mem index elem
 
   let limited_get (floor : int) (size : int) (mem : 'a t) (index : int) : 'a =
     if index >= floor + size || index < floor then

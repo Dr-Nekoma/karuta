@@ -2,12 +2,12 @@ module Option = struct
   let ( let+ ) = Option.bind
 end
 
-let show_registers (registers : int Lib.Compiler.RegisterMap.t) : string =
-  let open Lib.Compiler.RegisterMap in
-  BatSeq.fold_left
-    (fun acc (term, register) ->
-      acc ^ "\n" ^ Lib.Ast.show term ^ " = " ^ string_of_int register)
-    "" (to_seq registers)
+(* let show_registers (registers : int Lib.Compiler.RegisterMap.t) : string = *)
+(*   let open Lib.Compiler.RegisterMap in *)
+(*   BatSeq.fold_left *)
+(*     (fun acc (term, register) -> *)
+(*       acc ^ "\n" ^ Lib.Ast.show term ^ " = " ^ string_of_int register) *)
+(*     "" (to_seq registers) *)
 
 let _ =
   let open Option in
@@ -21,9 +21,9 @@ let _ =
       None
   | decls_queries ->
       let initialComputer = Lib.Machine.initialize () in
-      let compiler, _ =
+      let _, store =
         Lib.Compiler.compile
           (decls_queries, Lib.Compiler.initialize (), initialComputer.store)
       in
-      print_endline @@ show_registers compiler.registers;
+      print_endline @@ Lib.Machine.show_store store (Some 20);
       None
