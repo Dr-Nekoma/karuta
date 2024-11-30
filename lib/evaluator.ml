@@ -129,3 +129,27 @@ let unify_value (index_of_register : int)
       let h_register = h_register + 1 in
       let s_register = s_register + 1 in
       { computer with store; h_register; s_register }
+
+let put_variable (index_of_x_register : int) (index_of_a_register : int)
+    ({ store; registers; h_register; _ } as computer) : Machine.t =
+  let reference = Reference h_register in
+  let store = Store.heap_put reference h_register store in
+  let registers =
+    IM.add index_of_x_register reference
+    @@ IM.add index_of_a_register reference registers
+  in
+  { computer with store; h_register = h_register + 1; registers }
+
+let put_value (index_of_x_register : int) (index_of_a_register : int)
+    ({ registers; _ } as computer) : Machine.t =
+  let value = IM.find index_of_x_register registers in
+  let registers = IM.add index_of_a_register value registers in
+  { computer with registers }
+
+let get_variable (index_of_x_register : int) (index_of_a_register : int)
+    ({ registers; _ } as computer) : Machine.t =
+  let value = IM.find index_of_a_register registers in
+  let registers = IM.add index_of_x_register value registers in
+  { computer with registers }
+
+let get_value = unify
