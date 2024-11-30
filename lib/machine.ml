@@ -1,9 +1,24 @@
 module Cell = struct
-  type t =
+  type instruction =
+    | GetStructure of ((string * int) * int)
+    | PutStructure of ((string * int) * int)
+    | PutVariable of (int * int)
+    | GetVariable of (int * int)
+    | SetVariable of int
+    | SetValue of int
+    | UnifyVariable of int
+    | GetValue of (int * int)
+    | PutValue of (int * int)
+    | UnifyValue of int
+    | Call of int
+    | Proceed
+
+  and t =
     | Structure of int
     | Reference of int
     | Functor of string * int
     | Address of int
+    | Instruction of instruction
     | Empty
   [@@deriving show]
 end
