@@ -27,7 +27,10 @@ let rec compile : Ast.t list * t * Cell.t Store.t -> t * Cell.t Store.t =
   | [], compiler, store -> (compiler, store)
   | d :: ds, compiler, store -> (
       match d with
-      | Query f -> register_alloc_functor f compiler store
+      | Query f as query ->
+          let compiler, store = register_alloc_functor f compiler store in
+          let compiler, store = generate_code (compiler, store) query in
+          compile (ds, compiler, store)
       | Variable _ | Functor _ -> failwith "unreachable"
       | Declaration { head; body } as declaration ->
           let compiler, store =
@@ -63,10 +66,64 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
         let instruction = Cell.UnifyVariable index_of_register in
         add_instruction (compiler, store) instruction
   in
-
+  let rec query_helper
+      ((({ registers; variables; _ } as compiler), store) : t * Cell.t Store.t)
+      (elem : Ast.t) : t * Cell.t Store.t =
+    let open RegisterMap in
+    let index_of_register = find elem registers in
+    match elem with
+    | Variable { namev } ->
+        let variables, instruction =
+          match S.find_opt namev variables with
+          | None -> (S.add namev variables, Cell.SetVariable index_of_register)
+          | Some _ -> (variables, Cell.SetValue index_of_register)
+        in
+        add_instruction ({ compiler with variables }, store) instruction
+    | Functor { namef; elements; arity } ->
+        let instruction =
+          Cell.PutStructure ((namef, arity), index_of_register)
+        in
+        let compiler, store = add_instruction (compiler, store) instruction in
+        List.fold_left query_helper (compiler, store) elements
+    | _ ->
+        let instruction = Cell.SetValue index_of_register in
+        add_instruction (compiler, store) instruction
+  in
+  let final_helper
+      ((({ registers; variables; _ } as compiler), store) : t * Cell.t Store.t)
+      (elem : Ast.t) : t * Cell.t Store.t =
+    let open RegisterMap in
+    let index_of_register = find elem registers in
+    match elem with
+    | Variable { namev } ->
+        let variables, instruction =
+          match S.find_opt namev variables with
+          | None -> (S.add namev variables, Cell.SetVariable index_of_register)
+          | Some _ -> (variables, Cell.SetValue index_of_register)
+        in
+        add_instruction ({ compiler with variables }, store) instruction
+    | _ ->
+        let instruction = Cell.SetValue index_of_register in
+        add_instruction (compiler, store) instruction
+  in
+  let non_variable : Ast.t -> bool = function
+    | Variable _ -> false
+    | _ -> true
+  in
   let open RegisterMap in
   match value with
-  | Query _ -> failwith "unreachable"
+  | Query ({ namef; elements; arity } as func) ->
+      let compiler, store =
+        List.fold_left query_helper (compiler, store)
+          (List.filter non_variable elements)
+      in
+      let index_of_register = find (Ast.Functor func) registers in
+      let instruction = Cell.PutStructure ((namef, arity), index_of_register) in
+      let compiler, store = add_instruction (compiler, store) instruction in
+      let compiler, store =
+        List.fold_left final_helper (compiler, store) elements
+      in
+      ({ compiler with variables = S.empty }, store)
   | Functor { namef; elements; arity } ->
       let index_register = find value registers in
       let instruction = Cell.GetStructure ((namef, arity), index_register) in
@@ -74,7 +131,10 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
       let compiler, store =
         List.fold_left argument_helper (compiler, store) elements
       in
-      List.fold_left generate_code (compiler, store) elements
+      let compiler, store =
+        List.fold_left generate_code (compiler, store) elements
+      in
+      ({ compiler with variables = S.empty }, store)
   | Variable _ -> (compiler, store)
   | Declaration { head; _ } ->
       generate_code (compiler, store) (Ast.Functor head)

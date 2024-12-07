@@ -25,5 +25,5 @@ let _ =
         Lib.Compiler.compile
           (decls_queries, Lib.Compiler.initialize (), initialComputer.store)
       in
-      print_endline @@ Lib.Machine.show_store store (Some 20);
+      print_endline @@ Lib.Machine.show_store store (Some 30);
       None
