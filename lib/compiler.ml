@@ -49,7 +49,11 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
     in
     ({ compiler with p_register = p_register + 1 }, store)
   in
-  let argument_helper
+  let emit_argument
+      ((variable, value, catchall) :
+        (int -> Cell.instruction)
+        * (int -> Cell.instruction)
+        * (int -> Cell.instruction))
       ((({ registers; variables; _ } as compiler), store) : t * Cell.t Store.t)
       (elem : Ast.t) : t * Cell.t Store.t =
     let open RegisterMap in
@@ -58,53 +62,39 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
     | Variable { namev } ->
         let variables, instruction =
           match S.find_opt namev variables with
-          | None -> (S.add namev variables, Cell.UnifyVariable index_of_register)
-          | Some _ -> (variables, Cell.UnifyValue index_of_register)
+          | None -> (S.add namev variables, variable index_of_register)
+          | Some _ -> (variables, value index_of_register)
         in
         add_instruction ({ compiler with variables }, store) instruction
     | _ ->
-        let instruction = Cell.UnifyVariable index_of_register in
+        let instruction = catchall index_of_register in
         add_instruction (compiler, store) instruction
   in
-  let rec query_helper
-      ((({ registers; variables; _ } as compiler), store) : t * Cell.t Store.t)
+  let emit_functor_argument =
+    emit_argument
+      ( (fun v -> Cell.UnifyVariable v),
+        (fun v -> Cell.UnifyValue v),
+        fun v -> Cell.UnifyVariable v )
+  in
+  let emit_toplevel_query_argument =
+    emit_argument
+      ( (fun v -> Cell.SetVariable v),
+        (fun v -> Cell.SetValue v),
+        fun v -> Cell.SetValue v )
+  in
+  let rec emit_query_argument
+      ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
       (elem : Ast.t) : t * Cell.t Store.t =
     let open RegisterMap in
     let index_of_register = find elem registers in
     match elem with
-    | Variable { namev } ->
-        let variables, instruction =
-          match S.find_opt namev variables with
-          | None -> (S.add namev variables, Cell.SetVariable index_of_register)
-          | Some _ -> (variables, Cell.SetValue index_of_register)
-        in
-        add_instruction ({ compiler with variables }, store) instruction
     | Functor { namef; elements; arity } ->
         let instruction =
           Cell.PutStructure ((namef, arity), index_of_register)
         in
         let compiler, store = add_instruction (compiler, store) instruction in
-        List.fold_left query_helper (compiler, store) elements
-    | _ ->
-        let instruction = Cell.SetValue index_of_register in
-        add_instruction (compiler, store) instruction
-  in
-  let final_helper
-      ((({ registers; variables; _ } as compiler), store) : t * Cell.t Store.t)
-      (elem : Ast.t) : t * Cell.t Store.t =
-    let open RegisterMap in
-    let index_of_register = find elem registers in
-    match elem with
-    | Variable { namev } ->
-        let variables, instruction =
-          match S.find_opt namev variables with
-          | None -> (S.add namev variables, Cell.SetVariable index_of_register)
-          | Some _ -> (variables, Cell.SetValue index_of_register)
-        in
-        add_instruction ({ compiler with variables }, store) instruction
-    | _ ->
-        let instruction = Cell.SetValue index_of_register in
-        add_instruction (compiler, store) instruction
+        List.fold_left emit_query_argument (compiler, store) elements
+    | _ -> emit_toplevel_query_argument (compiler, store) elem
   in
   let non_variable : Ast.t -> bool = function
     | Variable _ -> false
@@ -114,14 +104,14 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
   match value with
   | Query ({ namef; elements; arity } as func) ->
       let compiler, store =
-        List.fold_left query_helper (compiler, store)
+        List.fold_left emit_query_argument (compiler, store)
           (List.filter non_variable elements)
       in
       let index_of_register = find (Ast.Functor func) registers in
       let instruction = Cell.PutStructure ((namef, arity), index_of_register) in
       let compiler, store = add_instruction (compiler, store) instruction in
       let compiler, store =
-        List.fold_left final_helper (compiler, store) elements
+        List.fold_left emit_toplevel_query_argument (compiler, store) elements
       in
       ({ compiler with variables = S.empty }, store)
   | Functor { namef; elements; arity } ->
@@ -129,7 +119,7 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
       let instruction = Cell.GetStructure ((namef, arity), index_register) in
       let compiler, store = add_instruction (compiler, store) instruction in
       let compiler, store =
-        List.fold_left argument_helper (compiler, store) elements
+        List.fold_left emit_functor_argument (compiler, store) elements
       in
       let compiler, store =
         List.fold_left generate_code (compiler, store) elements
