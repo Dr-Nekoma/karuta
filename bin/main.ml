@@ -2,12 +2,13 @@ module Option = struct
   let ( let+ ) = Option.bind
 end
 
-(* let show_registers (registers : int Lib.Compiler.RegisterMap.t) : string = *)
-(*   let open Lib.Compiler.RegisterMap in *)
-(*   BatSeq.fold_left *)
-(*     (fun acc (term, register) -> *)
-(*       acc ^ "\n" ^ Lib.Ast.show term ^ " = " ^ string_of_int register) *)
-(*     "" (to_seq registers) *)
+let show_registers (registers : int Lib.Compiler.RegisterMap.t) : string =
+  let open Lib.Compiler.RegisterMap in
+  BatSeq.fold_left
+    (fun acc (term, register) ->
+      acc ^ "\n" ^ Lib.Ast.show term ^ " = " ^ string_of_int register)
+    "" (to_seq registers)
+[@@warning "-32"]
 
 let _ =
   let open Option in
