@@ -1,16 +1,18 @@
 module Cell = struct
-  type instruction =
-    | GetStructure of ((string * int) * int)
-    | PutStructure of ((string * int) * int)
-    | PutVariable of (int * int)
-    | GetVariable of (int * int)
-    | SetVariable of int
-    | SetValue of int
-    | UnifyVariable of int
-    | GetValue of (int * int)
-    | PutValue of (int * int)
-    | UnifyValue of int
-    | Call of int
+  type register = X of int | Y of int
+
+  and instruction =
+    | GetStructure of ((string * int) * register)
+    | PutStructure of ((string * int) * register)
+    | PutVariable of (register * register)
+    | GetVariable of (register * register)
+    | SetVariable of register
+    | SetValue of register
+    | UnifyVariable of register
+    | GetValue of (register * register)
+    | PutValue of (register * register)
+    | UnifyValue of register
+    | Call of register
     | Proceed
 
   and t =
@@ -38,10 +40,13 @@ end)
 
 type t = {
   store : Cell.t Store.t;
-  registers : Cell.t IM.t;
+  x_registers : Cell.t IM.t;
+  y_registers : Cell.t IM.t;
   h_register : int;
   s_register : int;
   p_register : int;
+  cp_register : int;
+  e_register : int;
   mode : Mode.t;
   fail : bool;
 }
@@ -60,8 +65,11 @@ let show_store (store : Cell.t Store.t) (how_many : int option) : string =
 let initialize () : t =
   {
     store = Store.initialize Store.empty Store.mem_size Cell.Empty;
-    registers = IM.empty ~eq:( = );
+    x_registers = IM.empty ~eq:( = );
+    y_registers = IM.empty ~eq:( = );
     p_register = 0;
+    cp_register = 0;
+    e_register = Store.stack_start;
     h_register = Store.heap_start;
     s_register = Store.stack_start;
     mode = Mode.Read;

@@ -72,15 +72,15 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
   in
   let emit_functor_argument =
     emit_argument
-      ( (fun v -> Cell.UnifyVariable v),
-        (fun v -> Cell.UnifyValue v),
-        fun v -> Cell.UnifyVariable v )
+      ( (fun v -> Cell.UnifyVariable (Cell.X v)),
+        (fun v -> Cell.UnifyValue (Cell.X v)),
+        fun v -> Cell.UnifyVariable (Cell.X v) )
   in
   let emit_toplevel_query_argument =
     emit_argument
-      ( (fun v -> Cell.SetVariable v),
-        (fun v -> Cell.SetValue v),
-        fun v -> Cell.SetValue v )
+      ( (fun v -> Cell.SetVariable (Cell.X v)),
+        (fun v -> Cell.SetValue (Cell.X v)),
+        fun v -> Cell.SetValue (Cell.X v) )
   in
   let rec emit_query_argument
       ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
@@ -90,7 +90,7 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
     match elem with
     | Functor { namef; elements; arity } ->
         let instruction =
-          Cell.PutStructure ((namef, arity), index_of_register)
+          Cell.PutStructure ((namef, arity), Cell.X index_of_register)
         in
         let compiler, store = add_instruction (compiler, store) instruction in
         List.fold_left emit_query_argument (compiler, store) elements
@@ -108,7 +108,9 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
           (List.filter non_variable elements)
       in
       let index_of_register = find (Ast.Functor func) registers in
-      let instruction = Cell.PutStructure ((namef, arity), index_of_register) in
+      let instruction =
+        Cell.PutStructure ((namef, arity), Cell.X index_of_register)
+      in
       let compiler, store = add_instruction (compiler, store) instruction in
       let compiler, store =
         List.fold_left emit_toplevel_query_argument (compiler, store) elements
@@ -116,7 +118,9 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
       ({ compiler with variables = S.empty }, store)
   | Functor { namef; elements; arity } ->
       let index_register = find value registers in
-      let instruction = Cell.GetStructure ((namef, arity), index_register) in
+      let instruction =
+        Cell.GetStructure ((namef, arity), Cell.X index_register)
+      in
       let compiler, store = add_instruction (compiler, store) instruction in
       let compiler, store =
         List.fold_left emit_functor_argument (compiler, store) elements
