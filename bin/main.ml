@@ -13,7 +13,7 @@ let show_registers (registers : int Lib.Compiler.RegisterMap.t) : string =
 let _ =
   let open Option in
   let+ content =
-    In_channel.with_open_text "examples/l1.krt" (fun fc ->
+    In_channel.with_open_text "examples/l2.krt" (fun fc ->
         try Some (In_channel.input_all fc) with End_of_file -> None)
   in
   match Lib.Parse.parse content with
