@@ -12,8 +12,10 @@ module Cell = struct
     | GetValue of (register * register)
     | PutValue of (register * register)
     | UnifyValue of register
-    | Call of register
+    | Call of (Ast.tag * int)
     | Proceed
+    | Allocate of int
+    | Deallocate
 
   and t =
     | Structure of int

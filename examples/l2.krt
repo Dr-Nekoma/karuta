@@ -1,4 +1,4 @@
-siblings[A, B] :-
-    father[Father, A],
-    father[Father, B].
+p[X, Y] :-
+    q[X, Z],
+    r[Z, Y].
 

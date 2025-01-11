@@ -26,6 +26,7 @@ let set_to_multiset (s : string S.t) : var_frequency_map =
 open Machine
 
 type register = Temporary of int | Permanent of int [@@deriving show]
+type register_set = register S.t
 
 type t = {
   p_register : int;
@@ -35,6 +36,7 @@ type t = {
   terms : term_queue;
   variables : variable_set;
   scope_variables : variable_set;
+  scope_registers : register_set;
 }
 
 let initialize () : t =
@@ -46,6 +48,7 @@ let initialize () : t =
     terms = FT.empty;
     variables = S.empty;
     scope_variables = S.empty;
+    scope_registers = S.empty;
   }
 
 let show_registers (registers : register RegisterMap.t) : string =
@@ -56,21 +59,31 @@ let show_registers (registers : register RegisterMap.t) : string =
     "" (to_seq registers)
 [@@warning "-32"]
 
-let rec reset_scope (compiler : t) : t =
-  { compiler with scope_variables = S.empty; x_register = 0; y_register = 0 }
+let rec reset_scope (compiler : t) (arity : int) : t =
+  {
+    compiler with
+    scope_variables = S.empty;
+    scope_registers = S.empty;
+    x_register = arity;
+    y_register = 0;
+  }
 
 and compile : Ast.t list * t * Cell.t Store.t -> t * Cell.t Store.t = function
   | [], compiler, store -> (compiler, store)
   | d :: ds, compiler, store -> (
       match d with
       | Query f as query ->
-          let compiler, store = register_alloc_functor f compiler store in
+          let compiler, store =
+            register_alloc_functor f (reset_scope compiler f.arity) store
+          in
           let compiler, store = generate_code (compiler, store) query in
           compile (ds, compiler, store)
-      | Variable _ | Functor _ -> failwith "unreachable"
+      | Variable _ | Functor _ -> failwith "unreachable compile"
       | Declaration { head; body } as declaration ->
           let compiler, store =
-            register_alloc_declaration head body (reset_scope compiler) store
+            register_alloc_declaration head body
+              (reset_scope compiler head.arity)
+              store
           in
           print_endline @@ show_registers compiler.registers;
           let compiler, store = generate_code (compiler, store) declaration in
@@ -154,6 +167,70 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
     | Variable _ -> false
     | _ -> true
   in
+  let head_folder
+      ((({ registers; scope_registers; _ } as compiler), store), counter)
+      element : (t * Cell.t Store.t) * int =
+    let open RegisterMap in
+    let raw_register = find element registers in
+    let register = cell_register raw_register in
+    let instruction = Cell.GetVariable (register, Cell.X counter) in
+    let scope_registers = S.add raw_register scope_registers in
+    ( add_instruction ({ compiler with scope_registers }, store) instruction,
+      counter + 1 )
+  in
+  let allocate_head ({ elements; _ } : Ast.func)
+      (({ y_register; _ } as compiler), store) : t * Cell.t Store.t =
+    let instruction = Cell.Allocate y_register in
+    let compiler, store = add_instruction (compiler, store) instruction in
+    List.fold_left head_folder ((compiler, store), 0) elements |> fst
+  in
+  let allocate_body (elements : Ast.func list) (compiler, store) :
+      t * Cell.t Store.t =
+    let allocate_clause (compiler, store)
+        ({ namef; elements; arity } : Ast.func) : t * Cell.t Store.t =
+      let allocate_argument
+          ((({ scope_registers; registers; _ } as compiler), store), counter)
+          (individual_element : Ast.t) : (t * Cell.t Store.t) * int =
+        match individual_element with
+        | Variable _ as var ->
+            let open RegisterMap in
+            let raw_register = find var registers in
+            let left_register = cell_register raw_register in
+            let scope_registers, instruction =
+              match S.find_opt raw_register scope_registers with
+              | None ->
+                  ( S.add raw_register scope_registers,
+                    Cell.PutVariable (left_register, Cell.X counter) )
+              | Some _ ->
+                  ( scope_registers,
+                    Cell.PutValue (left_register, Cell.X counter) )
+            in
+            ( add_instruction
+                ({ compiler with scope_registers }, store)
+                instruction,
+              counter + 1 )
+        | Functor func as f ->
+            let open RegisterMap in
+            let (compiler, store), _ =
+              (generate_code (compiler, store) (Ast.Query func), counter)
+            in
+            let raw_register = find f registers in
+            let left_register = cell_register raw_register in
+            let instruction = Cell.PutValue (left_register, Cell.X counter) in
+            (add_instruction (compiler, store) instruction, counter + 1)
+        | _ -> failwith "unreachable allocate_body"
+      in
+      let instruction = Cell.Call (namef, arity) in
+      let (compiler, store), _ =
+        List.fold_left allocate_argument ((compiler, store), 0) elements
+      in
+      add_instruction (compiler, store) instruction
+    in
+    let compiler, store =
+      List.fold_left allocate_clause (compiler, store) elements
+    in
+    add_instruction (compiler, store) Cell.Deallocate
+  in
   let open RegisterMap in
   match value with
   | Query ({ namef; elements; arity } as func) ->
@@ -180,9 +257,8 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
       in
       ({ compiler with variables = S.empty }, store)
   | Variable _ -> (compiler, store)
-  | Declaration { head; _ } ->
-      (* TODO: generate code for bodies of declarations *)
-      generate_code (compiler, store) (Ast.Functor head)
+  | Declaration { head; body } ->
+      (compiler, store) |> allocate_head head |> allocate_body body
 
 and register_alloc_loop : t -> Cell.t Store.t -> t * Cell.t Store.t =
  fun ({ terms; _ } as compiler) store ->
@@ -191,13 +267,13 @@ and register_alloc_loop : t -> Cell.t Store.t -> t * Cell.t Store.t =
   | Some (rest, d) -> (
       let new_compiler = { compiler with terms = rest } in
       match d with
-      | Declaration _ -> failwith "unreachable"
+      | Declaration _ -> failwith "unreachable register_alloc_loop"
       | Variable v -> register_alloc_variable v new_compiler store
       | Query f | Functor f -> register_alloc_functor f new_compiler store)
 
 and extract_variables (elem : Ast.t) : string S.t =
   match elem with
-  | Declaration _ | Query _ -> failwith "unreachable"
+  | Declaration _ | Query _ -> failwith "unreachable extract_variables"
   | Functor { elements; _ } ->
       let initial_set = S.empty in
       List.fold_left
