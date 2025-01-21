@@ -16,6 +16,7 @@ module Cell = struct
     | Proceed
     | Allocate of int
     | Deallocate
+    | Halt
 
   and t =
     | Structure of int
@@ -43,7 +44,6 @@ end)
 type t = {
   store : Cell.t Store.t;
   x_registers : Cell.t IM.t;
-  y_registers : Cell.t IM.t;
   h_register : int;
   s_register : int;
   p_register : int;
@@ -68,7 +68,6 @@ let initialize () : t =
   {
     store = Store.initialize Store.empty Store.mem_size Cell.Empty;
     x_registers = IM.empty ~eq:( = );
-    y_registers = IM.empty ~eq:( = );
     p_register = 0;
     cp_register = 0;
     e_register = Store.stack_start;
