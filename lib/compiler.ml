@@ -1,11 +1,18 @@
 module RegisterMap = BatMap.Make (Ast)
 module VariableMap = BatMap.Make (String)
+
+module FunctorMap = BatMap.Make (struct
+  type t = string * int [@@deriving ord]
+end)
+[@@warning "-32"]
+
 module FT = BatFingerTree
 module S = BatSet
 
 type term_queue = Ast.t FT.t
 type variable_set = Ast.tag S.t
 type var_frequency_map = int VariableMap.t
+type functor_map = int FunctorMap.t
 
 let multiset_mappend (m1 : var_frequency_map) (m2 : var_frequency_map) :
     var_frequency_map =
@@ -37,6 +44,7 @@ type t = {
   variables : variable_set;
   scope_variables : variable_set;
   scope_registers : register_set;
+  functor_table : functor_map;
 }
 
 let initialize () : t =
@@ -49,6 +57,7 @@ let initialize () : t =
     variables = S.empty;
     scope_variables = S.empty;
     scope_registers = S.empty;
+    functor_table = FunctorMap.empty;
   }
 
 let show_registers (registers : register RegisterMap.t) : string =
@@ -108,8 +117,9 @@ and cell_register : register -> Cell.register = function
   | Temporary value -> Cell.X value
   | Permanent value -> Cell.Y value
 
-and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
-    (value : Ast.t) : t * Cell.t Store.t =
+and generate_code
+    ((({ p_register; registers; functor_table; _ } as compiler), store) :
+      t * Cell.t Store.t) (value : Ast.t) : t * Cell.t Store.t =
   let add_instruction
       ((({ p_register; _ } as compiler), store) : t * Cell.t Store.t)
       (instruction : Cell.instruction) : t * Cell.t Store.t =
@@ -258,7 +268,12 @@ and generate_code ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
       ({ compiler with variables = S.empty }, store)
   | Variable _ -> (compiler, store)
   | Declaration { head; body } ->
-      (compiler, store) |> allocate_head head |> allocate_body body
+      let open FunctorMap in
+      let functor_table =
+        add (head.namef, head.arity) p_register functor_table
+      in
+      ({ compiler with functor_table }, store)
+      |> allocate_head head |> allocate_body body
 
 and register_alloc_loop : t -> Cell.t Store.t -> t * Cell.t Store.t =
  fun ({ terms; _ } as compiler) store ->
