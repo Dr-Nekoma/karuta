@@ -1,7 +1,37 @@
 open Machine
 open Machine.Cell
 
-let put_structure (index_of_register : int) (functor_label, functor_arity)
+let set_register (register : Cell.register) (cell : Cell.t)
+    ({ store; x_registers; e_register; _ } as computer) : Machine.t =
+  match register with
+  | Cell.X index_of_register ->
+      { computer with x_registers = IM.add index_of_register cell x_registers }
+  | Cell.Y index_of_register -> (
+      let stack_frame_size = Store.stack_get store (e_register + 2) in
+      match stack_frame_size with
+      | Address size ->
+          if index_of_register < size then
+            let store =
+              Store.stack_put cell (e_register + 3 + index_of_register) store
+            in
+            { computer with store }
+          else failwith "stack overflow"
+      | _ -> failwith "invalid stack size (Not Address)")
+
+let get_register (register : Cell.register)
+    { store; x_registers; e_register; _ } : Cell.t =
+  match register with
+  | Cell.X index_of_register -> IM.find index_of_register x_registers
+  | Cell.Y index_of_register -> (
+      let stack_frame_size = Store.stack_get store (e_register + 2) in
+      match stack_frame_size with
+      | Address size ->
+          if index_of_register < size then
+            Store.stack_get store (e_register + 3 + index_of_register)
+          else failwith "stack overflow"
+      | _ -> failwith "invalid stack size (Not Address)")
+
+let put_structure (register : Cell.register) (functor_label, functor_arity)
     ({ store; x_registers; h_register; _ } as computer) : Machine.t =
   let structure = Machine.Cell.Structure (h_register + 1) in
   let func = Functor (functor_label, functor_arity) in
@@ -9,24 +39,24 @@ let put_structure (index_of_register : int) (functor_label, functor_arity)
     Store.heap_put func (h_register + 1)
     @@ Store.heap_put structure h_register store
   in
-  let x_registers = IM.add index_of_register structure x_registers in
+  let computer = set_register register structure computer in
   let h_register = h_register + 2 in
   { computer with store; x_registers; h_register }
 
-let set_variable (index_of_register : int)
+let set_variable (register : Cell.register)
     ({ store; x_registers; h_register; _ } as computer) =
   let reference = Reference h_register in
   let store = Store.heap_put reference h_register store in
-  let x_registers = IM.add index_of_register reference x_registers in
+  let computer = set_register register reference computer in
   let h_register = h_register + 1 in
   { computer with store; x_registers; h_register }
 
-let set_value (index_of_register : int)
-    ({ store; x_registers; h_register; _ } as computer) =
-  let value_of_register = IM.find index_of_register x_registers in
+let set_value (register : Cell.register) ({ store; h_register; _ } as computer)
+    =
+  let value_of_register = get_register register computer in
   let store = Store.heap_put value_of_register h_register store in
   let h_register = h_register + 1 in
-  { computer with store; x_registers; h_register }
+  { computer with store; h_register }
 
 let rec deref (a : int) store : int =
   let cell = Store.heap_get store a in
@@ -41,40 +71,48 @@ let bind (i1 : address) (i2 : address) (mem : Machine.Cell.t Store.t) :
   Store.heap_put (Reference i2) i1 mem
 
 let get_structure ((functor_label, functor_arity) : string * int)
-    (index_of_register : int) ({ store; h_register; _ } as computer) : Machine.t
-    =
-  let addr = deref index_of_register store in
-  match Store.heap_get store addr with
-  | Reference _ ->
-      let structure = Structure (h_register + 1) in
-      let func = Functor (functor_label, functor_arity) in
-      let heap =
-        bind addr h_register
-        @@ Store.heap_put func (h_register + 1)
-        @@ Store.heap_put structure h_register store
-      in
-      { computer with h_register = h_register + 2; mode = Write; store = heap }
-  | Structure a -> (
-      match Store.heap_get store a with
-      | Functor (label, arity)
-        when label == functor_label && arity == functor_arity ->
-          { computer with s_register = a + 1; mode = Read }
+    (register : Cell.register) ({ store; h_register; _ } as computer) :
+    Machine.t =
+  match get_register register computer with
+  | Address address -> (
+      let addr = deref address store in
+      match Store.heap_get store addr with
+      | Reference _ ->
+          let structure = Structure (h_register + 1) in
+          let func = Functor (functor_label, functor_arity) in
+          let heap =
+            bind addr h_register
+            @@ Store.heap_put func (h_register + 1)
+            @@ Store.heap_put structure h_register store
+          in
+          {
+            computer with
+            h_register = h_register + 2;
+            mode = Write;
+            store = heap;
+          }
+      | Structure a -> (
+          match Store.heap_get store a with
+          | Functor (label, arity)
+            when label == functor_label && arity == functor_arity ->
+              { computer with s_register = a + 1; mode = Read }
+          | _ -> { computer with fail = true })
       | _ -> { computer with fail = true })
-  | _ -> { computer with fail = true }
+  | _ -> failwith "unreachable get_structure"
 
-let unify_variable (index_of_register : int)
+let unify_variable (register : Cell.register)
     ({ store; x_registers; h_register; s_register; mode; _ } as computer) :
     Machine.t =
   match mode with
   | Read ->
       let value = Store.heap_get store s_register in
-      let x_registers = IM.add index_of_register value x_registers in
+      let computer = set_register register value computer in
       let s_register = s_register + 1 in
       { computer with x_registers; s_register }
   | Write ->
       let reference = Reference s_register in
       let store = Store.heap_put reference h_register store in
-      let x_registers = IM.add index_of_register reference x_registers in
+      let computer = set_register register reference computer in
       let h_register = h_register + 1 in
       let s_register = s_register + 1 in
       { computer with store; x_registers; h_register; s_register }
@@ -114,43 +152,40 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
   in
   aux newComputer
 
-let unify_value (index_of_register : int)
-    ({ store; x_registers; h_register; s_register; mode; _ } as computer) :
-    Machine.t =
+let unify_value (register : Cell.register)
+    ({ store; h_register; s_register; mode; _ } as computer) : Machine.t =
   match mode with
-  | Read ->
-      {
-        (unify index_of_register s_register computer) with
-        s_register = s_register + 1;
-      }
+  | Read -> (
+      match get_register register computer with
+      | Address addr ->
+          { (unify addr s_register computer) with s_register = s_register + 1 }
+      | _ -> failwith "unreachable unify_value")
   | Write ->
-      let value_of_register = IM.find index_of_register x_registers in
+      let value_of_register = get_register register computer in
       let store = Store.heap_put value_of_register h_register store in
       let h_register = h_register + 1 in
       let s_register = s_register + 1 in
       { computer with store; h_register; s_register }
 
-let put_variable (index_of_x_register : int) (index_of_a_register : int)
+let put_variable (x_register : Cell.register) (a_register : Cell.register)
     ({ store; x_registers; h_register; _ } as computer) : Machine.t =
   let reference = Reference h_register in
   let store = Store.heap_put reference h_register store in
-  let x_registers =
-    IM.add index_of_x_register reference
-    @@ IM.add index_of_a_register reference x_registers
+  let computer =
+    set_register a_register reference computer
+    |> set_register x_register reference
   in
   { computer with store; h_register = h_register + 1; x_registers }
 
-let put_value (index_of_x_register : int) (index_of_a_register : int)
-    ({ x_registers; _ } as computer) : Machine.t =
-  let value = IM.find index_of_x_register x_registers in
-  let x_registers = IM.add index_of_a_register value x_registers in
-  { computer with x_registers }
+let put_value (x_register : Cell.register) (a_register : Cell.register) computer
+    : Machine.t =
+  let value = get_register x_register computer in
+  set_register a_register value computer
 
-let get_variable (index_of_x_register : int) (index_of_a_register : int)
-    ({ x_registers; _ } as computer) : Machine.t =
-  let value = IM.find index_of_a_register x_registers in
-  let x_registers = IM.add index_of_x_register value x_registers in
-  { computer with x_registers }
+let get_variable (x_register : Cell.register) (a_register : Cell.register)
+    computer : Machine.t =
+  let value = get_register a_register computer in
+  set_register x_register value computer
 
 let get_value = unify
 
@@ -171,7 +206,7 @@ let allocate (n : int)
   let new_e =
     match Store.stack_get store (e_register + 2) with
     | Cell.Address n -> n + e_register + 3
-    | _ -> failwith "unreachable"
+    | _ -> failwith "unreachable allocate"
   in
   let store =
     Store.stack_put (Cell.Address n) (new_e + 2)
@@ -181,3 +216,88 @@ let allocate (n : int)
   let e_register = new_e in
   let p_register = p_register + 1 (* This is the instruction size *) in
   { computer with store; p_register; e_register }
+
+let call (functor' : Ast.tag * int) (functor_table : Compiler.functor_map)
+    ({ p_register; _ } as computer) : Machine.t =
+  let open Compiler.FunctorMap in
+  let cp_register = p_register + 1 (* This is the instruction size *) in
+  let p_register = find functor' functor_table in
+  { computer with cp_register; p_register }
+
+let proceed ({ cp_register; _ } as computer) : Machine.t =
+  { computer with p_register = cp_register }
+
+let eval_step (functor_table : Compiler.functor_map)
+    ({ store; p_register; _ } as computer : Machine.t) : Machine.t * bool =
+  let open Machine.Cell in
+  match Store.code_get store p_register with
+  | Instruction instruction -> (
+      match instruction with
+      | GetStructure ((name, arity), register) ->
+          ( {
+              (get_structure (name, arity) register computer) with
+              p_register = p_register + 1;
+            },
+            false )
+      | PutStructure ((name, arity), register) ->
+          ( {
+              (put_structure register (name, arity) computer) with
+              p_register = p_register + 1;
+            },
+            false )
+      | PutVariable (x_register, a_register) ->
+          ( {
+              (put_variable x_register a_register computer) with
+              p_register = p_register + 1;
+            },
+            false )
+      | GetVariable (x_register, a_register) ->
+          ( {
+              (get_variable x_register a_register computer) with
+              p_register = p_register + 1;
+            },
+            false )
+      | SetVariable register ->
+          ( { (set_variable register computer) with p_register = p_register + 1 },
+            false )
+      | SetValue register ->
+          ( { (set_value register computer) with p_register = p_register + 1 },
+            false )
+      | UnifyVariable register ->
+          ( {
+              (unify_variable register computer) with
+              p_register = p_register + 1;
+            },
+            false )
+      | PutValue (x_register, a_register) ->
+          ( {
+              (put_value x_register a_register computer) with
+              p_register = p_register + 1;
+            },
+            false )
+      | GetValue (x_register, a_register) -> (
+          match
+            (get_register x_register computer, get_register a_register computer)
+          with
+          | Address x_addr, Address a_addr ->
+              ( {
+                  (get_value x_addr a_addr computer) with
+                  p_register = p_register + 1;
+                },
+                false )
+          | _ -> failwith "unreachable GetValue")
+      | UnifyValue register ->
+          ( { (unify_value register computer) with p_register = p_register + 1 },
+            false )
+      | Allocate n -> (allocate n computer, false)
+      | Deallocate ->
+          ({ (deallocate computer) with p_register = p_register + 1 }, false)
+      | Call predicate -> (call predicate functor_table computer, false)
+      | Proceed -> (proceed computer, false)
+      | Halt -> (computer, true))
+  | _ -> failwith "unreachable eval_step"
+
+let rec eval (functor_table : Compiler.functor_map) (computer : Machine.t) :
+    Machine.t =
+  let computer, stop = eval_step functor_table computer in
+  if stop then computer else eval functor_table computer

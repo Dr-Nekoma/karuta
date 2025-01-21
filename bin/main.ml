@@ -22,9 +22,19 @@ let _ =
       None
   | decls_queries ->
       let initialComputer = Lib.Machine.initialize () in
-      let _, store =
+      let compiler, store =
         Lib.Compiler.compile
           (decls_queries, Lib.Compiler.initialize (), initialComputer.store)
       in
       print_endline @@ Lib.Machine.show_store store (Some 30);
+      let open Lib.Machine in
+      let stack_start = initialComputer.e_register in
+      let store =
+        Store.code_put (Cell.Instruction Cell.Halt) compiler.p_register store
+        |> Store.stack_put (Cell.Address stack_start) stack_start
+        |> Store.stack_put (Cell.Address compiler.p_register) (stack_start + 1)
+        |> Store.stack_put (Cell.Address 0) (stack_start + 2)
+      in
+      let stacked_machine = { initialComputer with store } in
+      let _ = Lib.Evaluator.eval compiler.functor_table stacked_machine in
       None
