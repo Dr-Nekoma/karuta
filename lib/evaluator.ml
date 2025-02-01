@@ -21,7 +21,11 @@ let set_register (register : Cell.register) (cell : Cell.t)
 let get_register (register : Cell.register)
     { store; x_registers; e_register; _ } : Cell.t =
   match register with
-  | Cell.X index_of_register -> IM.find index_of_register x_registers
+  | Cell.X index_of_register ->
+      print_endline "finding in get_register";
+      let register = IM.find index_of_register x_registers in
+      print_endline "found in get_register";
+      register
   | Cell.Y index_of_register -> (
       let stack_frame_size = Store.stack_get store (e_register + 2) in
       match stack_frame_size with

@@ -1,2 +1,4 @@
 father[joaquim, jubileu].
 father[joaquim, manuel].
+
+p[f[X], h[Y, f[a]], Y].

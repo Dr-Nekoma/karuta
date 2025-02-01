@@ -1,8 +1,10 @@
 module RegisterMap = BatMap.Make (Ast)
 module VariableMap = BatMap.Make (String)
 
+type functor_name = string * int [@@deriving ord]
+
 module FunctorMap = BatMap.Make (struct
-  type t = string * int [@@deriving ord]
+  type t = functor_name [@@deriving ord]
 end)
 [@@warning "-32"]
 
@@ -34,6 +36,7 @@ open Machine
 
 type register = Temporary of int | Permanent of int [@@deriving show]
 type register_set = register S.t
+type entry_point = { p_register : int; functor_name : functor_name }
 
 type t = {
   p_register : int;
@@ -45,6 +48,7 @@ type t = {
   scope_variables : variable_set;
   scope_registers : register_set;
   functor_table : functor_map;
+  entry_point : entry_point option;
 }
 
 let initialize () : t =
@@ -58,6 +62,7 @@ let initialize () : t =
     scope_variables = S.empty;
     scope_registers = S.empty;
     functor_table = FunctorMap.empty;
+    entry_point = None;
   }
 
 let show_registers (registers : register RegisterMap.t) : string =
@@ -81,12 +86,18 @@ and compile : Ast.t list * t * Cell.t Store.t -> t * Cell.t Store.t = function
   | [], compiler, store -> (compiler, store)
   | d :: ds, compiler, store -> (
       match d with
-      | Query f as query ->
-          let compiler, store =
-            register_alloc_functor f (reset_scope compiler f.arity) store
+      | Query f as query -> (
+          let ({ p_register; entry_point; _ } as compiler), store =
+            register_alloc_query f (reset_scope compiler 0) store
           in
-          let compiler, store = generate_code (compiler, store) query in
-          compile (ds, compiler, store)
+          match entry_point with
+          | None ->
+              let functor_name = (f.namef, f.arity) in
+              let entry_point = Some { p_register; functor_name } in
+              let compiler = { compiler with entry_point } in
+              let compiler, store = generate_code (compiler, store) query in
+              compile (ds, compiler, store)
+          | Some _ -> failwith "multiple queries are not supported yet")
       | Variable _ | Functor _ -> failwith "unreachable compile"
       | Declaration { head; body } as declaration ->
           let compiler, store =
@@ -173,10 +184,6 @@ and generate_code
         List.fold_left emit_query_argument (compiler, store) elements
     | _ -> emit_toplevel_query_argument (compiler, store) elem
   in
-  let non_variable : Ast.t -> bool = function
-    | Variable _ -> false
-    | _ -> true
-  in
   let head_folder
       ((({ registers; scope_registers; _ } as compiler), store), counter)
       element : (t * Cell.t Store.t) * int =
@@ -243,17 +250,12 @@ and generate_code
   in
   let open RegisterMap in
   match value with
-  | Query ({ namef; elements; arity } as func) ->
+  | Query { namef; elements; arity } ->
       let compiler, store =
-        List.fold_left emit_query_argument (compiler, store)
-          (List.filter non_variable elements)
+        List.fold_left emit_query_argument (compiler, store) elements
       in
-      let register = cell_register @@ find (Ast.Functor func) registers in
-      let instruction = Cell.PutStructure ((namef, arity), register) in
+      let instruction = Cell.Call (namef, arity) in
       let compiler, store = add_instruction (compiler, store) instruction in
-      let compiler, store =
-        List.fold_left emit_toplevel_query_argument (compiler, store) elements
-      in
       ({ compiler with variables = S.empty }, store)
   | Functor { namef; elements; arity } ->
       let register = cell_register @@ find value registers in
@@ -284,7 +286,8 @@ and register_alloc_loop : t -> Cell.t Store.t -> t * Cell.t Store.t =
       match d with
       | Declaration _ -> failwith "unreachable register_alloc_loop"
       | Variable v -> register_alloc_variable v new_compiler store
-      | Query f | Functor f -> register_alloc_functor f new_compiler store)
+      | Query _ -> failwith "there's no such thing as a nested query"
+      | Functor f -> register_alloc_functor f new_compiler store)
 
 and extract_variables (elem : Ast.t) : string S.t =
   match elem with
@@ -334,6 +337,12 @@ and register_alloc_functor :
     Ast.func -> t -> Cell.t Store.t -> t * Cell.t Store.t =
  fun ({ elements; _ } as func) ({ terms; _ } as compiler) store ->
   let compiler = alloc_register compiler (Ast.Functor func) in
+  let terms = FT.append terms (FT.of_list elements) in
+  register_alloc_loop { compiler with terms } store
+
+and register_alloc_query : Ast.func -> t -> Cell.t Store.t -> t * Cell.t Store.t
+    =
+ fun { elements; _ } ({ terms; _ } as compiler) store ->
   let terms = FT.append terms (FT.of_list elements) in
   register_alloc_loop { compiler with terms } store
 

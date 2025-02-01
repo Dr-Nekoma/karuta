@@ -20,7 +20,7 @@ let _ =
   | [] ->
       print_endline "File could not be parsed.";
       None
-  | decls_queries ->
+  | decls_queries -> (
       let initialComputer = Lib.Machine.initialize () in
       let compiler, store =
         Lib.Compiler.compile
@@ -35,6 +35,21 @@ let _ =
         |> Store.stack_put (Cell.Address compiler.p_register) (stack_start + 1)
         |> Store.stack_put (Cell.Address 0) (stack_start + 2)
       in
-      let stacked_machine = { initialComputer with store } in
-      let _ = Lib.Evaluator.eval compiler.functor_table stacked_machine in
-      None
+
+      match compiler.entry_point with
+      | None -> None
+      | Some entry_point -> (
+          match
+            Lib.Compiler.FunctorMap.find_opt entry_point.functor_name
+              compiler.functor_table
+          with
+          | Some _ ->
+              let stacked_machine =
+                {
+                  initialComputer with
+                  store;
+                  p_register = entry_point.p_register;
+                }
+              in
+              Some (Lib.Evaluator.eval compiler.functor_table stacked_machine)
+          | None -> failwith "queried using undefined predicate"))

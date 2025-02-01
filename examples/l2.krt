@@ -1,6 +1,9 @@
 p[X, Y] :-
     q[X, Z],
     r[Z, Y].
+
 q[A, B].
 r[C, D].
 
+
+p[Z, h[Z, W], f[W]]?
