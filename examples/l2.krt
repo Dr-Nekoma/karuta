@@ -1,3 +1,4 @@
+p[Z, h[Z, W], f[W]]?
 p[X, Y] :-
     q[X, Z],
     r[Z, Y].
@@ -5,5 +6,7 @@ p[X, Y] :-
 q[A, B].
 r[C, D].
 
+p[A, B, C] :-
+    p[A, B],
+    p[B, C].
 
-p[Z, h[Z, W], f[W]]?
