@@ -17,6 +17,7 @@ module Cell = struct
     | Allocate of int
     | Deallocate
     | Halt
+  [@@deriving show]
 
   and t =
     | Structure of int
@@ -63,6 +64,14 @@ let show_store (store : Cell.t Store.t) (how_many : int option) : string =
     (fun acc elem -> acc ^ " " ^ Cell.show elem)
     ""
     (limit_list @@ Store.to_list store)
+
+let show_x_registers (registers : Cell.t IM.t) : string =
+  let open IM in
+  fold
+    (fun key value acc ->
+      acc ^ "\n" ^ string_of_int key ^ " = " ^ Cell.show value)
+    registers ""
+[@@warning "-32"]
 
 let initialize () : t =
   {

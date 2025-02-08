@@ -20,6 +20,7 @@ let set_register (register : Cell.register) (cell : Cell.t)
 
 let get_register (register : Cell.register)
     { store; x_registers; e_register; _ } : Cell.t =
+  print_endline @@ Machine.show_x_registers x_registers;
   match register with
   | Cell.X index_of_register ->
       print_endline "finding in get_register";
@@ -48,12 +49,12 @@ let put_structure (register : Cell.register) (functor_label, functor_arity)
   { computer with store; x_registers; h_register }
 
 let set_variable (register : Cell.register)
-    ({ store; x_registers; h_register; _ } as computer) =
+    ({ store; h_register; _ } as computer) =
   let reference = Reference h_register in
   let store = Store.heap_put reference h_register store in
   let computer = set_register register reference computer in
   let h_register = h_register + 1 in
-  { computer with store; x_registers; h_register }
+  { computer with store; h_register }
 
 let set_value (register : Cell.register) ({ store; h_register; _ } as computer)
     =
@@ -234,8 +235,10 @@ let proceed ({ cp_register; _ } as computer) : Machine.t =
 let eval_step (functor_table : Compiler.functor_map)
     ({ store; p_register; _ } as computer : Machine.t) : Machine.t * bool =
   let open Machine.Cell in
+  print_endline @@ string_of_int p_register;
   match Store.code_get store p_register with
   | Instruction instruction -> (
+      print_endline @@ Machine.Cell.show_instruction instruction;
       match instruction with
       | GetStructure ((name, arity), register) ->
           ( {
@@ -283,7 +286,7 @@ let eval_step (functor_table : Compiler.functor_map)
           match
             (get_register x_register computer, get_register a_register computer)
           with
-          | Address x_addr, Address a_addr ->
+          | Reference x_addr, Reference a_addr ->
               ( {
                   (get_value x_addr a_addr computer) with
                   p_register = p_register + 1;

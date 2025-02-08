@@ -99,13 +99,18 @@ and compile : Ast.t list * t * Cell.t Store.t -> t * Cell.t Store.t = function
               compile (ds, compiler, store)
           | Some _ -> failwith "multiple queries are not supported yet")
       | Variable _ | Functor _ -> failwith "unreachable compile"
+      | Declaration { head; body = [] } as decl ->
+          let compiler, store =
+            register_alloc_functor head (reset_scope compiler 0) store
+          in
+          let compiler, store = generate_code (compiler, store) decl in
+          compile (ds, compiler, store)
       | Declaration { head; body } as declaration ->
           let compiler, store =
             register_alloc_declaration head body
               (reset_scope compiler head.arity)
               store
           in
-          print_endline @@ show_registers compiler.registers;
           let compiler, store = generate_code (compiler, store) declaration in
           compile (ds, compiler, store))
 
@@ -165,6 +170,61 @@ and generate_code
       ( (fun v -> Cell.UnifyVariable v),
         (fun v -> Cell.UnifyValue v),
         fun v -> Cell.UnifyVariable v )
+  in
+  let emit_nested_fact_argument
+      ((({ registers; terms; _ } as compiler), store) : t * Cell.t Store.t)
+      (elem : Ast.t) : t * Cell.t Store.t =
+    let open RegisterMap in
+    let register = cell_register @@ find elem registers in
+    let instruction = Cell.UnifyVariable register in
+    let ((compiler, store) as result) =
+      add_instruction (compiler, store) instruction
+    in
+    match elem with
+    | Variable _ -> result
+    | Functor _ as f -> ({ compiler with terms = FT.cons terms f }, store)
+    | _ -> failwith "unreachable emit_nested_fact_argument"
+  in
+  let emit_queue_nested_fact_argument
+      ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
+      (elem : Ast.t) : t * Cell.t Store.t =
+    let open RegisterMap in
+    let register = cell_register @@ find elem registers in
+    match elem with
+    | Variable _ ->
+        let instruction = Cell.UnifyVariable register in
+        add_instruction (compiler, store) instruction
+    | Functor { namef; arity; elements } ->
+        let instruction = Cell.GetStructure ((namef, arity), register) in
+        let compiler, store = add_instruction (compiler, store) instruction in
+        List.fold_left emit_nested_fact_argument (compiler, store) elements
+    | _ -> failwith "unreachable emit_queue_nested_fact_argument"
+  in
+  let rec emit_queue_fact_arguments
+      ((({ terms; _ } as compiler), store) : t * Cell.t Store.t) :
+      t * Cell.t Store.t =
+    match FT.front terms with
+    | None -> (compiler, store)
+    | Some (rest, d) ->
+        let compiler = { compiler with terms = rest } in
+        let result = emit_queue_nested_fact_argument (compiler, store) d in
+        emit_queue_fact_arguments result
+  in
+  let emit_fact_argument
+      ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
+      (index : int) (elem : Ast.t) : t * Cell.t Store.t =
+    let open RegisterMap in
+    let register = cell_register @@ find elem registers in
+    let arg_register = Cell.X index in
+    match elem with
+    | Variable _ ->
+        let instruction = Cell.GetValue (register, arg_register) in
+        add_instruction (compiler, store) instruction
+    | Functor { namef; arity; elements } ->
+        let instruction = Cell.GetStructure ((namef, arity), arg_register) in
+        let compiler, store = add_instruction (compiler, store) instruction in
+        List.fold_left emit_nested_fact_argument (compiler, store) elements
+    | _ -> failwith "unreachable emit_fact_argument"
   in
   let emit_toplevel_query_argument =
     emit_argument
@@ -269,6 +329,16 @@ and generate_code
       in
       ({ compiler with variables = S.empty }, store)
   | Variable _ -> (compiler, store)
+  | Declaration { head = { elements; namef; arity }; body = [] } ->
+      let open FunctorMap in
+      let functor_table = add (namef, arity) p_register functor_table in
+      let compiler, store =
+        Seq.fold_lefti emit_fact_argument
+          ({ compiler with functor_table }, store)
+          (List.to_seq elements)
+      in
+      let compiler, store = emit_queue_fact_arguments (compiler, store) in
+      add_instruction (compiler, store) Cell.Proceed
   | Declaration { head; body } ->
       let open FunctorMap in
       let functor_table =
