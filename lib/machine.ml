@@ -81,7 +81,7 @@ let initialize () : t =
     cp_register = 0;
     e_register = Store.stack_start;
     h_register = Store.heap_start;
-    s_register = Store.stack_start;
+    s_register = Store.heap_start;
     mode = Mode.Read;
     fail = false;
   }
