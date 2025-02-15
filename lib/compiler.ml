@@ -172,16 +172,15 @@ and generate_code
         fun v -> Cell.UnifyVariable v )
   in
   let emit_nested_fact_argument
-      ((({ registers; terms; _ } as compiler), store) : t * Cell.t Store.t)
-      (elem : Ast.t) : t * Cell.t Store.t =
+      ((({ registers; terms; variables; _ } as compiler), store) :
+        t * Cell.t Store.t) (elem : Ast.t) : t * Cell.t Store.t =
     let open RegisterMap in
     let register = cell_register @@ find elem registers in
     let instruction = Cell.UnifyVariable register in
-    let ((compiler, store) as result) =
-      add_instruction (compiler, store) instruction
-    in
+    let compiler, store = add_instruction (compiler, store) instruction in
     match elem with
-    | Variable _ -> result
+    | Variable { namev } ->
+        ({ compiler with variables = S.add namev variables }, store)
     | Functor _ as f -> ({ compiler with terms = FT.cons terms f }, store)
     | _ -> failwith "unreachable emit_nested_fact_argument"
   in
@@ -211,15 +210,19 @@ and generate_code
         emit_queue_fact_arguments result
   in
   let emit_fact_argument
-      ((({ registers; _ } as compiler), store) : t * Cell.t Store.t)
+      ((({ registers; variables; _ } as compiler), store) : t * Cell.t Store.t)
       (index : int) (elem : Ast.t) : t * Cell.t Store.t =
     let open RegisterMap in
     let register = cell_register @@ find elem registers in
     let arg_register = Cell.X index in
     match elem with
-    | Variable _ ->
-        let instruction = Cell.GetValue (register, arg_register) in
-        add_instruction (compiler, store) instruction
+    | Variable { namev } ->
+        let variables, instruction =
+          match S.find_opt namev variables with
+          | None -> (S.add namev variables, Cell.UnifyVariable arg_register)
+          | Some _ -> (variables, Cell.GetValue (register, arg_register))
+        in
+        add_instruction ({ compiler with variables }, store) instruction
     | Functor { namef; arity; elements } ->
         let instruction = Cell.GetStructure ((namef, arity), arg_register) in
         let compiler, store = add_instruction (compiler, store) instruction in
