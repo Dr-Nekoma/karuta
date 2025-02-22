@@ -76,6 +76,7 @@
               ocamlPackages.ppx_deriving
               ocamlPackages.ppxlib
               ocamlPackages.batteries
+              ocamlPackages.earlybird
               # Ocaml package dependencies needed to build go here.
             ];
 
@@ -187,6 +188,7 @@
               ocamlPackages.utop
               ocamlPackages.ppx_deriving
               ocamlPackages.ppxlib
+              ocamlPackages.earlybird
             ];
 
             # Tools from packages

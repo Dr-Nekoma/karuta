@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "OCaml earlybird (experimental)",
+            "type": "ocaml.earlybird",
+            "request": "launch",
+            "program": "./_build/default/bin/main.bc",
+            "stopOnEntry": true,
+            "cwd": "${workspaceFolder}"
+        },
+    ]
+}

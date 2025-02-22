@@ -10,7 +10,7 @@ let show_registers (registers : int Lib.Compiler.RegisterMap.t) : string =
     "" (to_seq registers)
 [@@warning "-32"]
 
-let _ =
+let main () =
   let open Option in
   let+ content =
     In_channel.with_open_text "examples/l2.krt" (fun fc ->
@@ -53,3 +53,6 @@ let _ =
               in
               Some (Lib.Evaluator.eval compiler.functor_table stacked_machine)
           | None -> failwith "queried using undefined predicate"))
+
+let _ =
+  main()

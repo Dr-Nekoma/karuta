@@ -42,9 +42,12 @@ module Store = Store.Make (struct
   let trail_pdl_size = 100
 end)
 
+module IntMap = Map.Make(Int)
+
 type t = {
   store : Cell.t Store.t;
-  x_registers : Cell.t IM.t;
+  x_registers : Cell.t IntMap.t;
+  (* Cell.t IM.t; *)
   h_register : int;
   s_register : int;
   p_register : int;
@@ -65,8 +68,14 @@ let show_store (store : Cell.t Store.t) (how_many : int option) : string =
     ""
     (limit_list @@ Store.to_list store)
 
-let show_x_registers (registers : Cell.t IM.t) : string =
-  let open IM in
+(* type maguetas_type = (int*Cell.t) list *)
+(* [@@deriving show] *)
+
+let show_x_registers (registers : Cell.t IntMap.t) : string =
+  let open IntMap in
+  (* let new_map: maguetas_type ref = ref [] in *)
+  (* IntMap.iter (fun (k: int) (v: Cell.t) -> new_map := (k, v)::(!new_map)) registers; *)
+  (* show_maguetas_type (!new_map); *)
   fold
     (fun key value acc ->
       acc ^ "\n" ^ string_of_int key ^ " = " ^ Cell.show value)
@@ -76,7 +85,8 @@ let show_x_registers (registers : Cell.t IM.t) : string =
 let initialize () : t =
   {
     store = Store.initialize Store.empty Store.mem_size Cell.Empty;
-    x_registers = IM.empty ~eq:( = );
+    x_registers = IntMap.empty;
+    (* IM.empty ~eq:( = ); *)
     p_register = 0;
     cp_register = 0;
     e_register = Store.stack_start;

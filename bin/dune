@@ -6,6 +6,7 @@
 (executable
  (name main)
  (public_name karuta)
+ (modules main)
  (libraries lib)
  (modes byte exe)
  (package karuta))

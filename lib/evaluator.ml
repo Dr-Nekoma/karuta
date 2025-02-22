@@ -5,7 +5,8 @@ let set_register (register : Cell.register) (cell : Cell.t)
     ({ store; x_registers; e_register; _ } as computer) : Machine.t =
   match register with
   | Cell.X index_of_register ->
-      let x_registers = IM.add index_of_register cell x_registers in
+      let x_registers = Machine.IntMap.add index_of_register cell x_registers in
+        (* IM.add index_of_register cell x_registers in *)
       print_endline "setting register";
       print_endline @@ Machine.show_x_registers x_registers;
       (* FIXME: figure out this eldritch beast *)
@@ -29,7 +30,7 @@ let get_register (register : Cell.register)
   match register with
   | Cell.X index_of_register ->
       print_endline "finding in get_register";
-      let register = IM.find index_of_register x_registers in
+      let register = Machine.IntMap.find index_of_register x_registers in
       print_endline "found in get_register";
       register
   | Cell.Y index_of_register -> (
