@@ -10,7 +10,7 @@
 
 (library
  (name lib)
- (modules ast store machine compiler evaluator parse parser lexer)
+ (modules Ast Store Machine Compiler Evaluator Parse Parser Lexer)
  (libraries batteries)
  (package karuta)
  (preprocess
