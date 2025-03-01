@@ -1,0 +1,130 @@
+module RegisterMap = BatMap.Make (Ast)
+module VariableMap = BatMap.Make (String)
+module FT = BatFingerTree
+
+type term_queue = Ast.t FT.t
+
+module S = BatSet
+
+type variable_set = Ast.tag S.t
+type register = Temporary of int | Permanent of int [@@deriving show]
+
+type t = {
+  x_register : int;
+  y_register : int;
+  registers : register RegisterMap.t;
+  permanent_variables : variable_set;
+}
+
+type var_frequency_map = int VariableMap.t
+
+let multiset_mappend (m1 : var_frequency_map) (m2 : var_frequency_map) :
+    var_frequency_map =
+  let mappend (_ : string) (v1 : int option) (v2 : int option) : int option =
+    match (v1, v2) with
+    | Some n1, Some n2 -> Some (n1 + n2)
+    | None, Some n2 -> Some n2
+    | Some n1, None -> Some n1
+    | None, None -> None
+  in
+  VariableMap.merge mappend m1 m2
+
+let set_to_multiset (s : string S.t) : var_frequency_map =
+  let open VariableMap in
+  let lambda elem acc = add elem 1 acc in
+  S.fold lambda s VariableMap.empty
+
+let initial_allocator : t =
+  {
+    x_register = 0;
+    y_register = 0;
+    registers = RegisterMap.empty;
+    permanent_variables = S.empty;
+  }
+
+let rec allocate
+    ({ registers; permanent_variables; x_register; y_register; _ } as allocator)
+    (elem : Ast.t) : t =
+  let register, x_register, y_register =
+    match elem with
+    | Variable { namev } -> (
+        match S.find_opt namev permanent_variables with
+        | None -> (Temporary x_register, x_register + 1, y_register)
+        | Some _ -> (Permanent y_register, x_register, y_register + 1))
+    | _ -> (Temporary x_register, x_register + 1, y_register)
+  in
+  let open RegisterMap in
+  let registers = add elem register registers in
+  { allocator with registers; x_register; y_register }
+
+and allocate_loop : t -> term_queue -> t =
+ fun allocator terms ->
+  match FT.front terms with
+  | None -> allocator
+  | Some (rest, d) -> (
+      match d with
+      | Declaration _ -> failwith "unreachable register_alloc_loop"
+      | Variable v -> allocate_variable v allocator rest
+      | Query _ -> failwith "there's no such thing as a nested query"
+      | Functor f -> allocate_functor f allocator rest)
+
+and allocate_functor : Ast.func -> t -> term_queue -> t =
+ fun ({ elements; _ } as func) allocator terms ->
+  let allocator = allocate allocator (Ast.Functor func) in
+  let terms = FT.append terms (FT.of_list elements) in
+  allocate_loop allocator terms
+
+and allocate_variable : Ast.var -> t -> term_queue -> t =
+  let open RegisterMap in
+  fun var allocator terms ->
+    match find_opt (Ast.Variable var) allocator.registers with
+    | None -> allocate_loop (allocate allocator (Ast.Variable var)) terms
+    | Some _ -> allocate_loop allocator terms
+
+and variables_of_term (elem : Ast.t) : string S.t =
+  match elem with
+  | Declaration _ | Query _ -> failwith "unreachable extract_variables"
+  | Functor { elements; _ } ->
+      List.fold_left
+        (fun acc e -> S.union acc @@ variables_of_term e)
+        S.empty elements
+  | Variable { namev } -> S.add namev S.empty
+
+and allocate_declaration : Ast.func -> Ast.func list -> t =
+ fun ({ elements; _ } as head) body ->
+  let first_clause, other_clauses =
+    match body with
+    | [] -> ([], [])
+    | first_clause :: other_clauses ->
+        ([ Ast.Functor first_clause ], other_clauses)
+  in
+  let permanent_variables =
+    let extracted_head_variables =
+      set_to_multiset
+      @@ List.fold_left S.union S.empty
+      @@ List.map variables_of_term (Ast.Functor head :: first_clause)
+    in
+    let folder acc e =
+      multiset_mappend acc @@ set_to_multiset @@ variables_of_term
+      @@ Ast.Functor e
+    in
+    List.fold_left folder extracted_head_variables other_clauses
+    |> VariableMap.filterv (fun v -> v != 1)
+    |> VariableMap.keys |> S.of_enum
+  in
+  let ( ++ ) = FT.append in
+  let terms =
+    let open Ast in
+    FT.of_list elements
+    ++ (FT.of_list @@ List.concat_map (fun { elements; _ } -> elements) body)
+  in
+  allocate_loop
+    {
+      initial_allocator with
+      permanent_variables;
+      x_register = List.length elements;
+    }
+    terms
+
+and allocate_query : Ast.func -> t =
+ fun { elements; _ } -> allocate_loop initial_allocator (FT.of_list elements)
