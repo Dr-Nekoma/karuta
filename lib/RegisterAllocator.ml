@@ -18,6 +18,14 @@ type t = {
 
 type var_frequency_map = int VariableMap.t
 
+let show_registers (registers : register RegisterMap.t) : string =
+  let open RegisterMap in
+  BatSeq.fold_left
+    (fun acc (term, register) ->
+      acc ^ "\n" ^ Ast.show term ^ " = " ^ show_register register)
+    "" (to_seq registers)
+[@@warning "-32"]
+
 let multiset_mappend (m1 : var_frequency_map) (m2 : var_frequency_map) :
     var_frequency_map =
   let mappend (_ : string) (v1 : int option) (v2 : int option) : int option =

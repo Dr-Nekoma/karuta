@@ -23,20 +23,19 @@ let main () =
       None
   | decls_queries -> (
       let initialComputer = Lib.Machine.initialize () in
-      let compiler, generator, store =
+      let compiler, store =
         Lib.Compiler.compile
-          ( decls_queries,
-            Lib.Compiler.initialize (),
-            Lib.CodeGenerator.initialize (),
-            initialComputer.store )
+          (decls_queries, Lib.Compiler.initialize (), initialComputer.store)
       in
       print_endline @@ Lib.Machine.show_store store (Some 30);
       let open Lib.Machine in
       let stack_start = initialComputer.e_register in
       let store =
-        Store.code_put (Cell.Instruction Cell.Halt) generator.p_register store
+        Store.code_put (Cell.Instruction Cell.Halt)
+          compiler.code_generator.p_register store
         |> Store.stack_put (Cell.Address stack_start) stack_start
-        |> Store.stack_put (Cell.Address generator.p_register) (stack_start + 1)
+        |> Store.stack_put (Cell.Address compiler.code_generator.p_register)
+             (stack_start + 1)
         |> Store.stack_put (Cell.Address 0) (stack_start + 2)
       in
 
@@ -45,7 +44,7 @@ let main () =
       | Some entry_point -> (
           match
             Lib.CodeGenerator.FunctorMap.find_opt entry_point.functor_name
-              generator.functor_table
+              compiler.code_generator.functor_table
           with
           | Some _ ->
               let stacked_machine =
@@ -55,7 +54,9 @@ let main () =
                   p_register = entry_point.p_register;
                 }
               in
-              Some (Lib.Evaluator.eval generator.functor_table stacked_machine)
+              Some
+                (Lib.Evaluator.eval compiler.code_generator.functor_table
+                   stacked_machine)
           | None -> failwith "queried using undefined predicate"))
 
 let _ = main ()
