@@ -6,7 +6,7 @@ let set_register (register : Cell.register) (cell : Cell.t)
   match register with
   | Cell.X index_of_register ->
       let x_registers = Machine.IntMap.add index_of_register cell x_registers in
-        (* IM.add index_of_register cell x_registers in *)
+      (* IM.add index_of_register cell x_registers in *)
       print_endline "setting register";
       print_endline @@ Machine.show_x_registers x_registers;
       (* FIXME: figure out this eldritch beast *)

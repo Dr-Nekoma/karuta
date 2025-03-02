@@ -10,7 +10,16 @@
 
 (library
  (name lib)
- (modules Ast Store Machine RegisterAllocator Compiler Evaluator Parse Parser Lexer)
+ (modules
+  Ast
+  Store
+  Machine
+  RegisterAllocator
+  Compiler
+  Evaluator
+  Parse
+  Parser
+  Lexer)
  (libraries batteries)
  (package karuta)
  (preprocess

@@ -42,7 +42,7 @@ module Store = Store.Make (struct
   let trail_pdl_size = 100
 end)
 
-module IntMap = Map.Make(Int)
+module IntMap = Map.Make (Int)
 
 type t = {
   store : Cell.t Store.t;
