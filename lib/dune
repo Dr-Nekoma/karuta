@@ -12,6 +12,7 @@
  (name lib)
  (modules
   Ast
+  CodeGenerator
   Store
   Machine
   RegisterAllocator

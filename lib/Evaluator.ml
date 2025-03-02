@@ -230,9 +230,9 @@ let allocate (n : int)
   let p_register = p_register + 1 (* This is the instruction size *) in
   { computer with store; p_register; e_register }
 
-let call (functor' : Ast.tag * int) (functor_table : Compiler.functor_map)
+let call (functor' : Ast.tag * int) (functor_table : CodeGenerator.functor_map)
     ({ p_register; _ } as computer) : Machine.t =
-  let open Compiler.FunctorMap in
+  let open CodeGenerator.FunctorMap in
   let cp_register = p_register + 1 (* This is the instruction size *) in
   let p_register = find functor' functor_table in
   { computer with cp_register; p_register }
@@ -240,7 +240,7 @@ let call (functor' : Ast.tag * int) (functor_table : Compiler.functor_map)
 let proceed ({ cp_register; _ } as computer) : Machine.t =
   { computer with p_register = cp_register }
 
-let eval_step (functor_table : Compiler.functor_map)
+let eval_step (functor_table : CodeGenerator.functor_map)
     ({ store; p_register; _ } as computer : Machine.t) : Machine.t * bool =
   let open Machine.Cell in
   print_endline @@ string_of_int p_register;
@@ -312,7 +312,7 @@ let eval_step (functor_table : Compiler.functor_map)
       | Halt -> (computer, true))
   | _ -> failwith "unreachable eval_step"
 
-let rec eval (functor_table : Compiler.functor_map) (computer : Machine.t) :
-    Machine.t =
+let rec eval (functor_table : CodeGenerator.functor_map) (computer : Machine.t)
+    : Machine.t =
   let computer, stop = eval_step functor_table computer in
   if stop then computer else eval functor_table computer
