@@ -129,7 +129,7 @@ and allocate_declaration : Ast.func -> Ast.func list -> t =
 and allocate_query : Ast.func -> t =
  fun { elements; _ } -> allocate_loop initial_allocator (FT.of_list elements)
 
-let allocate_toplevel_form : Ast.t -> t = function
+let allocate_toplevel : Ast.t -> t = function
   | Variable _ | Functor _ -> failwith "not top level forms"
   | Declaration { head; body } -> allocate_declaration head body
   | Query func -> allocate_query func

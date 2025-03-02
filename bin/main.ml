@@ -2,8 +2,9 @@ module Option = struct
   let ( let+ ) = Option.bind
 end
 
-let show_registers (registers : int Lib.Compiler.RegisterMap.t) : string =
-  let open Lib.Compiler.RegisterMap in
+let show_registers (registers : int Lib.RegisterAllocator.RegisterMap.t) :
+    string =
+  let open Lib.RegisterAllocator.RegisterMap in
   BatSeq.fold_left
     (fun acc (term, register) ->
       acc ^ "\n" ^ Lib.Ast.show term ^ " = " ^ string_of_int register)
@@ -54,5 +55,4 @@ let main () =
               Some (Lib.Evaluator.eval compiler.functor_table stacked_machine)
           | None -> failwith "queried using undefined predicate"))
 
-let _ =
-  main()
+let _ = main ()
