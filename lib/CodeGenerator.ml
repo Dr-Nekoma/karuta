@@ -1,15 +1,6 @@
-type functor_name = string * int [@@deriving ord]
-
 module VariableMap = BatMap.Make (String)
 
 type var_frequency_map = int VariableMap.t
-
-module FunctorMap = BatMap.Make (struct
-  type t = functor_name [@@deriving ord]
-end)
-[@@warning "-32"]
-
-type functor_map = int FunctorMap.t
 
 module FT = BatFingerTree
 module S = BatSet
@@ -23,16 +14,14 @@ type t = {
   terms : RegisterAllocator.term_queue;
   variables : RegisterAllocator.variable_set;
   scope_registers : register_set;
-  functor_table : functor_map;
 }
 
-let initialize () : t =
+let initialize (begin_addr : int) : t =
   {
-    p_register = 0;
+    p_register = begin_addr;
     terms = FT.empty;
     variables = S.empty;
     scope_registers = S.empty;
-    functor_table = FunctorMap.empty;
   }
 
 let cell_register : RegisterAllocator.register -> Cell.register = function
@@ -285,9 +274,7 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
   (generator, allocator, store)
 
 and generate
-    (( ({ p_register; functor_table; _ } as generator),
-       ({ registers; _ } as allocator),
-       store ) :
+    ((generator, ({ registers; _ } as allocator), store) :
       t * RegisterAllocator.t * Cell.t Store.t) (value : Ast.t) :
     t * RegisterAllocator.t * Cell.t Store.t =
   let open RegisterAllocator.RegisterMap in
@@ -315,12 +302,10 @@ and generate
       in
       ({ generator with variables = S.empty }, allocator, store)
   | Variable _ -> (generator, allocator, store)
-  | Declaration { head = { elements; namef; arity }; body = [] } ->
-      let open FunctorMap in
-      let functor_table = add (namef, arity) p_register functor_table in
+  | Declaration { head = { elements; _ }; body = [] } ->
       let generator, allocator, store =
         Seq.fold_lefti Fact.emit_argument
-          ({ generator with functor_table }, allocator, store)
+          (generator, allocator, store)
           (List.to_seq elements)
       in
       let generator, allocator, store =
@@ -329,9 +314,4 @@ and generate
       let generator, store = add_instruction (generator, store) Cell.Proceed in
       (generator, allocator, store)
   | Declaration { head; body } ->
-      let open FunctorMap in
-      let functor_table =
-        add (head.namef, head.arity) p_register functor_table
-      in
-      ({ generator with functor_table }, allocator, store)
-      |> allocate_head head |> allocate_body body
+      (generator, allocator, store) |> allocate_head head |> allocate_body body

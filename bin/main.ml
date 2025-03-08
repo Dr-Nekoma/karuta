@@ -31,32 +31,18 @@ let main () =
       let open Lib.Machine in
       let stack_start = initialComputer.e_register in
       let store =
-        Store.code_put (Cell.Instruction Cell.Halt)
-          compiler.code_generator.p_register store
+        Store.code_put (Cell.Instruction Cell.Halt) compiler.p_register store
         |> Store.stack_put (Cell.Address stack_start) stack_start
-        |> Store.stack_put (Cell.Address compiler.code_generator.p_register)
-             (stack_start + 1)
+        |> Store.stack_put (Cell.Address compiler.p_register) (stack_start + 1)
         |> Store.stack_put (Cell.Address 0) (stack_start + 2)
       in
 
       match compiler.entry_point with
       | None -> None
-      | Some entry_point -> (
-          match
-            Lib.CodeGenerator.FunctorMap.find_opt entry_point.functor_name
-              compiler.code_generator.functor_table
-          with
-          | Some _ ->
-              let stacked_machine =
-                {
-                  initialComputer with
-                  store;
-                  p_register = entry_point.p_register;
-                }
-              in
-              Some
-                (Lib.Evaluator.eval compiler.code_generator.functor_table
-                   stacked_machine)
-          | None -> failwith "queried using undefined predicate"))
+      | Some entry_point ->
+          let stacked_machine =
+            { initialComputer with store; p_register = entry_point.p_register }
+          in
+          Some (Lib.Evaluator.eval compiler.functor_table stacked_machine))
 
 let _ = main ()

@@ -1,40 +1,72 @@
-type entry_point = {
+type entry_point = { p_register : int }
+type functor_name = string * int [@@deriving ord]
+
+module FunctorMap = BatMap.Make (struct
+  type t = functor_name [@@deriving ord]
+end)
+[@@warning "-32"]
+
+type functor_map = int FunctorMap.t
+
+type t = {
+  entry_point : entry_point option;
   p_register : int;
-  functor_name : CodeGenerator.functor_name;
+  functor_table : functor_map;
 }
 
-type t = { entry_point : entry_point option; code_generator : CodeGenerator.t }
-
 let initialize () : t =
-  { entry_point = None; code_generator = CodeGenerator.initialize () }
+  { entry_point = None; p_register = 0; functor_table = FunctorMap.empty }
 
-let rec allocate_registers ({ entry_point; code_generator } : t) (elem : Ast.t)
-    : t * RegisterAllocator.t =
+let rec allocate_registers (elem : Ast.t) : RegisterAllocator.t =
   match elem with
   | Variable _ | Functor _ -> failwith "not top level forms"
-  | (Declaration { head = f; _ } | Query f) as form -> (
-      let allocator = RegisterAllocator.allocate_toplevel form in
-      match entry_point with
-      | None ->
-          let functor_name = (f.namef, f.arity) in
-          let entry_point =
-            Some { p_register = code_generator.p_register; functor_name }
-          in
-          ({ entry_point; code_generator }, allocator)
-      | Some _ -> failwith "multiple queries are not supported yet")
+  | (Declaration _ | Query _) as form ->
+      RegisterAllocator.allocate_toplevel form
 
 and compile :
     Ast.t list * t * Machine.Cell.t Machine.Store.t ->
     t * Machine.Cell.t Machine.Store.t = function
   | [], compiler, store -> (compiler, store)
-  | d :: ds, compiler, store -> (
+  | d :: ds, ({ entry_point; p_register; functor_table } as compiler), store
+    -> (
       match d with
       | Variable _ | Functor _ -> failwith "unreachable compile"
-      | (Declaration _ | Query _) as form ->
-          let compiler, allocator = allocate_registers compiler form in
+      | Declaration { head; _ } as form ->
+          let open FunctorMap in
+          let functor_table =
+            add (head.namef, head.arity) p_register functor_table
+          in
+          let allocator = allocate_registers form in
           let code_generator, _, store =
             CodeGenerator.generate
-              (compiler.code_generator, allocator, store)
+              (CodeGenerator.initialize p_register, allocator, store)
               form
           in
-          compile (ds, { compiler with code_generator }, store))
+          compile
+            ( ds,
+              {
+                compiler with
+                p_register = code_generator.p_register;
+                functor_table;
+              },
+              store )
+      | Query _ as form ->
+          let entry_point =
+            match entry_point with
+            | None -> Some { p_register }
+            | Some _ -> failwith "multiple queries are not supported yet"
+          in
+          let allocator = allocate_registers form in
+          let code_generator, _, store =
+            CodeGenerator.generate
+              (CodeGenerator.initialize p_register, allocator, store)
+              form
+          in
+          compile
+            ( ds,
+              {
+                compiler with
+                entry_point;
+                p_register = code_generator.p_register;
+              },
+              store ))
