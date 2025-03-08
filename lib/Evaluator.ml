@@ -6,11 +6,8 @@ let set_register (register : Cell.register) (cell : Cell.t)
   match register with
   | Cell.X index_of_register ->
       let x_registers = Machine.IntMap.add index_of_register cell x_registers in
-      (* IM.add index_of_register cell x_registers in *)
-      print_endline "setting register";
-      print_endline @@ Machine.show_x_registers x_registers;
-      (* FIXME: figure out this eldritch beast *)
-      print_endline "these are the registers";
+      (* print_endline "setting register"; *)
+      (* print_endline @@ Machine.show_x_registers x_registers; *)
       { computer with x_registers }
   | Cell.Y index_of_register -> (
       let stack_frame_size = Store.stack_get store (e_register + 2) in
@@ -26,13 +23,10 @@ let set_register (register : Cell.register) (cell : Cell.t)
 
 let get_register (register : Cell.register)
     { store; x_registers; e_register; _ } : Cell.t =
-  print_endline @@ Machine.show_x_registers x_registers;
+  (* print_endline @@ Machine.show_x_registers x_registers; *)
   match register with
   | Cell.X index_of_register ->
-      print_endline "finding in get_register";
-      let register = Machine.IntMap.find index_of_register x_registers in
-      print_endline "found in get_register";
-      register
+      Machine.IntMap.find index_of_register x_registers
   | Cell.Y index_of_register -> (
       let stack_frame_size = Store.stack_get store (e_register + 2) in
       match stack_frame_size with
@@ -115,7 +109,6 @@ let unify_variable (register : Cell.register)
     ({ store; h_register; s_register; mode; _ } as computer) : Machine.t =
   match mode with
   | Read ->
-      print_endline @@ string_of_int s_register;
       let value = Store.heap_get store s_register in
       let computer = set_register register value computer in
       let s_register = s_register + 1 in
@@ -139,7 +132,6 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
     let mutFail = ref fail in
     while not (Store.pdl_empty !mutStore || !mutFail) do
       let generic_p1 = Store.pdl_top !mutStore in
-      print_endline @@ Cell.show generic_p1;
       let (Reference p1) = generic_p1 in
       mutStore := Store.pdl_pop !mutStore;
       let (Reference p2) = Store.pdl_top !mutStore in
@@ -243,10 +235,10 @@ let proceed ({ cp_register; _ } as computer) : Machine.t =
 let eval_step (functor_table : Compiler.functor_map)
     ({ store; p_register; _ } as computer : Machine.t) : Machine.t * bool =
   let open Machine.Cell in
-  print_endline @@ string_of_int p_register;
+  (* print_endline @@ string_of_int p_register; *)
   match Store.code_get store p_register with
   | Instruction instruction -> (
-      print_endline @@ Machine.Cell.show_instruction instruction;
+      (* print_endline @@ Machine.Cell.show_instruction instruction; *)
       match instruction with
       | GetStructure ((name, arity), register) ->
           ( {

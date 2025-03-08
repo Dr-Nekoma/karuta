@@ -287,6 +287,7 @@ and generate
       in
       let instruction = Cell.Call (namef, arity) in
       let generator, store = add_instruction (generator, store) instruction in
+      let generator, store = add_instruction (generator, store) Cell.Halt in
       ({ generator with variables = S.empty }, allocator, store)
   | Functor { namef; elements; arity } ->
       let register = cell_register @@ find value registers in
