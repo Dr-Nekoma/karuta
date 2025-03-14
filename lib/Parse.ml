@@ -1,3 +1,1 @@
-let parse input =
-  let lexbuf = Lexing.from_string input in
-  Parser.program Lexer.read lexbuf
+let parse input = Lexing.from_string input |> Parser.program Lexer.read
