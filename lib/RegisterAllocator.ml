@@ -108,13 +108,14 @@ and allocate_declaration : Ast.func -> Ast.func list -> t =
   in
   let permanent_variables =
     let extracted_head_variables =
-      set_to_multiset
-      @@ List.fold_left S.union S.empty
-      @@ List.map variables_of_term (Ast.Functor head :: first_clause)
+      Ast.Functor head :: first_clause
+      |> List.map variables_of_term
+      |> List.fold_left S.union S.empty
+      |> set_to_multiset
     in
     let folder acc e =
-      multiset_mappend acc @@ set_to_multiset @@ variables_of_term
-      @@ Ast.Functor e
+      Ast.Functor e |> variables_of_term |> set_to_multiset
+      |> multiset_mappend acc
     in
     List.fold_left folder extracted_head_variables other_clauses
     |> VariableMap.filterv (fun v -> v != 1)
