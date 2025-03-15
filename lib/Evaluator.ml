@@ -5,7 +5,8 @@ let set_register (register : Cell.register) (cell : Cell.t)
     ({ store; x_registers; e_register; _ } as computer) : Machine.t =
   match register with
   | Cell.X index_of_register ->
-      let x_registers = Machine.IntMap.add index_of_register cell x_registers in
+      let open Machine.IntMap in
+      let x_registers = add index_of_register cell x_registers in
       (* print_endline "setting register"; *)
       (* print_endline @@ Machine.show_x_registers x_registers; *)
       { computer with x_registers }
@@ -26,7 +27,8 @@ let get_register (register : Cell.register)
   (* print_endline @@ Machine.show_x_registers x_registers; *)
   match register with
   | Cell.X index_of_register ->
-      Machine.IntMap.find index_of_register x_registers
+      let open Machine.IntMap in
+      find index_of_register x_registers
   | Cell.Y index_of_register -> (
       let stack_frame_size = Store.stack_get store (e_register + 2) in
       match stack_frame_size with
@@ -40,28 +42,25 @@ let put_structure (register : Cell.register) (functor_label, functor_arity)
     ({ store; h_register; _ } as computer) : Machine.t =
   let structure = Machine.Cell.Structure (h_register + 1) in
   let func = Functor (functor_label, functor_arity) in
-  let store =
-    Store.heap_put func (h_register + 1)
-    @@ Store.heap_put structure h_register store
-  in
-  let computer = set_register register structure computer in
-  let h_register = h_register + 2 in
-  { computer with store; h_register }
+  store
+  |> Store.heap_put structure h_register
+  |> Store.heap_put func (h_register + 1)
+  |> (fun store -> { computer with store; h_register = h_register + 2 })
+  |> set_register register structure
 
 let set_variable (register : Cell.register)
     ({ store; h_register; _ } as computer) =
   let reference = Reference h_register in
-  let store = Store.heap_put reference h_register store in
-  let computer = set_register register reference computer in
-  let h_register = h_register + 1 in
-  { computer with store; h_register }
+  store
+  |> Store.heap_put reference h_register
+  |> (fun store -> { computer with store; h_register = h_register + 1 })
+  |> set_register register reference
 
 let set_value (register : Cell.register) ({ store; h_register; _ } as computer)
     =
   let value_of_register = get_register register computer in
-  let store = Store.heap_put value_of_register h_register store in
-  let h_register = h_register + 1 in
-  { computer with store; h_register }
+  store |> Store.heap_put value_of_register h_register |> fun store ->
+  { computer with store; h_register = h_register + 1 }
 
 let rec deref (a : int) store : int =
   let cell = Store.heap_get store a in
@@ -86,9 +85,10 @@ let get_structure ((functor_label, functor_arity) : string * int)
           let structure = Structure (h_register + 1) in
           let func = Functor (functor_label, functor_arity) in
           let heap =
-            bind addr h_register
-            @@ Store.heap_put func (h_register + 1)
-            @@ Store.heap_put structure h_register store
+            store
+            |> Store.heap_put structure h_register
+            |> Store.heap_put func (h_register + 1)
+            |> bind addr h_register
           in
           {
             computer with
@@ -110,22 +110,24 @@ let unify_variable (register : Cell.register)
   match mode with
   | Read ->
       let value = Store.heap_get store s_register in
-      let computer = set_register register value computer in
-      let s_register = s_register + 1 in
-      { computer with s_register }
+      set_register register value { computer with s_register = s_register + 1 }
   | Write ->
       let reference = Reference h_register in
-      let store = Store.heap_put reference h_register store in
-      let computer = set_register register reference computer in
-      let h_register = h_register + 1 in
-      let s_register = s_register + 1 in
-      { computer with store; h_register; s_register }
+      store
+      |> Store.heap_put reference h_register
+      |> (fun store ->
+           {
+             computer with
+             store;
+             h_register = h_register + 1;
+             s_register = s_register + 1;
+           })
+      |> set_register register reference
 
 let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
   let newComputer =
-    (fun s -> { computer with fail = false; store = s })
-    @@ Store.pdl_push (Address a2)
-    @@ Store.pdl_push (Address a1) store
+    store |> Store.pdl_push (Address a1) |> Store.pdl_push (Address a2)
+    |> fun store -> { computer with store; fail = false }
   in
   let aux ({ store; fail; _ } as computer) : Machine.t =
     let mutStore = ref store in
@@ -167,20 +169,22 @@ let unify_value (register : Cell.register)
       | _ -> failwith "unreachable unify_value")
   | Write ->
       let value_of_register = get_register register computer in
-      let store = Store.heap_put value_of_register h_register store in
-      let h_register = h_register + 1 in
-      let s_register = s_register + 1 in
-      { computer with store; h_register; s_register }
+      store |> Store.heap_put value_of_register h_register |> fun store ->
+      {
+        computer with
+        store;
+        h_register = h_register + 1;
+        s_register = s_register + 1;
+      }
 
 let put_variable (x_register : Cell.register) (a_register : Cell.register)
     ({ store; h_register; _ } as computer) : Machine.t =
   let reference = Reference h_register in
-  let store = Store.heap_put reference h_register store in
-  let computer =
-    set_register a_register reference computer
-    |> set_register x_register reference
-  in
-  { computer with store; h_register = h_register + 1 }
+  store
+  |> Store.heap_put reference h_register
+  |> (fun store -> { computer with store; h_register = h_register + 1 })
+  |> set_register a_register reference
+  |> set_register x_register reference
 
 let put_value (x_register : Cell.register) (a_register : Cell.register) computer
     : Machine.t =
@@ -197,13 +201,12 @@ let get_value = unify
 let deallocate ({ e_register; store; _ } as computer) : Machine.t =
   let p_register = Store.stack_get store (e_register + 1) in
   let e_register = Store.stack_get store e_register in
-  let p_register, e_register =
-    match (p_register, e_register) with
-    | Cell.Address p_register, Cell.Address e_register ->
-        (p_register, e_register)
-    | _ -> failwith "unreachable"
-  in
-  { computer with p_register; e_register }
+  match (p_register, e_register) with
+  | Cell.Address p_register, Cell.Address e_register ->
+      { computer with p_register; e_register }
+  | _ -> failwith "unreachable"
+
+let instruction_size = 1
 
 let allocate (n : int)
     ({ store; e_register; cp_register; p_register; _ } as computer) : Machine.t
@@ -213,21 +216,26 @@ let allocate (n : int)
     | Cell.Address n -> n + e_register + 3
     | _ -> failwith "unreachable allocate"
   in
-  let store =
-    Store.stack_put (Cell.Address n) (new_e + 2)
-    @@ Store.stack_put (Cell.Address cp_register) (new_e + 1)
-    @@ Store.stack_put (Cell.Address e_register) new_e store
-  in
-  let e_register = new_e in
-  let p_register = p_register + 1 (* This is the instruction size *) in
-  { computer with store; p_register; e_register }
+  store
+  |> Store.stack_put (Cell.Address e_register) new_e
+  |> Store.stack_put (Cell.Address cp_register) (new_e + 1)
+  |> Store.stack_put (Cell.Address n) (new_e + 2)
+  |> fun store ->
+  {
+    computer with
+    store;
+    p_register = p_register + instruction_size;
+    e_register = new_e;
+  }
 
 let call (functor' : Ast.tag * int) (functor_table : Compiler.functor_map)
     ({ p_register; _ } as computer) : Machine.t =
   let open Compiler.FunctorMap in
-  let cp_register = p_register + 1 (* This is the instruction size *) in
-  let p_register = find functor' functor_table in
-  { computer with cp_register; p_register }
+  {
+    computer with
+    cp_register = p_register + instruction_size;
+    p_register = find functor' functor_table;
+  }
 
 let proceed ({ cp_register; _ } as computer) : Machine.t =
   { computer with p_register = cp_register }
