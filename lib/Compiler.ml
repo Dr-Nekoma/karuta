@@ -33,21 +33,18 @@ and compile :
       | Variable _ | Functor _ -> failwith "unreachable compile"
       | Declaration { head; _ } as form ->
           let open FunctorMap in
-          let functor_table =
-            add (head.namef, head.arity) p_register functor_table
-          in
-          let allocator = allocate_registers form in
-          let code_generator, _, store =
+          ( allocate_registers form |> fun allocator ->
             CodeGenerator.generate
               (CodeGenerator.initialize p_register, allocator, store)
-              form
-          in
+              form )
+          |> fun (code_generator, _, store) ->
           compile
             ( ds,
               {
                 compiler with
                 p_register = code_generator.p_register;
-                functor_table;
+                functor_table =
+                  add (head.namef, head.arity) p_register functor_table;
               },
               store )
       | Query _ as form ->
@@ -56,12 +53,11 @@ and compile :
             | None -> Some { p_register }
             | Some _ -> failwith "multiple queries are not supported yet"
           in
-          let allocator = allocate_registers form in
-          let code_generator, _, store =
+          ( allocate_registers form |> fun allocator ->
             CodeGenerator.generate
               (CodeGenerator.initialize p_register, allocator, store)
-              form
-          in
+              form )
+          |> fun (code_generator, _, store) ->
           compile
             ( ds,
               {
