@@ -51,7 +51,7 @@ module type Fact = sig
     t * RegisterAllocator.t * Cell.t Store.t
 end
 
-module Fact = struct
+module Fact : Fact = struct
   let rec emit_nested_argument
       (( ({ terms; variables; _ } as generator),
          ({ registers; _ } as allocator),
@@ -139,7 +139,7 @@ module type Argument = sig
     t * RegisterAllocator.t * Cell.t Store.t
 end
 
-module Argument = struct
+module Argument : Argument = struct
   let rec emit_argument
       ((variable, value, catchall) :
         (Cell.register -> Cell.instruction)
