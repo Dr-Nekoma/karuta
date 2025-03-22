@@ -7,7 +7,7 @@ let show_registers (registers : int Lib.RegisterAllocator.RegisterMap.t) :
   let open Lib.RegisterAllocator.RegisterMap in
   BatSeq.fold_left
     (fun acc (term, register) ->
-      acc ^ "\n" ^ Lib.Ast.show term ^ " = " ^ string_of_int register)
+      acc ^ "\n" ^ Lib.Ast.show_expr term ^ " = " ^ string_of_int register)
     "" (to_seq registers)
 [@@warning "-32"]
 

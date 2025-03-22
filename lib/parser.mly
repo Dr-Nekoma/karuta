@@ -13,7 +13,7 @@
 %token EOF
 %token QUERY
 
-%start <Ast.t list> program
+%start <Ast.Clause.t list> program
 %%
 
 program:
