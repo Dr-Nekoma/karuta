@@ -1,8 +1,7 @@
 %{
 %}
 
-%token <int32> LITERAL_INT
-%token <string> LITERAL_STRING
+%token <string> LITERAL_ATOM
 %token <string> IDENT
 %token <string> UPPER_IDENT
 %token LEFT_DELIM
@@ -28,6 +27,8 @@ program:
 functorr:
   | functor_name = IDENT; LEFT_DELIM; identifiers = list_identifiers
   { ({ namef = functor_name; elements = identifiers; arity = List.length identifiers } : Ast.func) }
+  | functor_name = LITERAL_ATOM
+  { ({namef = functor_name; elements = []; arity = 0}) }
   ;
 
 declaration:
@@ -50,9 +51,3 @@ list_identifiers:
   | IDENT RIGHT_DELIM { [Ast.Functor {namef = $1; elements = []; arity = 0}] }
   | functor_elem = functorr; RIGHT_DELIM { [Ast.Functor functor_elem] }
   | UPPER_IDENT RIGHT_DELIM { [Ast.Variable {namev = $1}] }
-
-value:
-  | i = LITERAL_INT
-    { Ast.VInteger i}
-  | s = LITERAL_STRING
-    { Ast.VString s}

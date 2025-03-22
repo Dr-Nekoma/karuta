@@ -15,7 +15,7 @@ let letter = lower_letter | upper_letter
 let ident = lower_letter (letter | '_' | '-')*
 let upper_ident = upper_letter (letter | '_')*
 let int = '-'? ['0'-'9'] ['0'-'9']*
-              
+
 rule read =
   parse
   | white { read lexbuf }
@@ -23,9 +23,8 @@ rule read =
   | ident { IDENT (Lexing.lexeme lexbuf) }
   | upper_ident { UPPER_IDENT (Lexing.lexeme lexbuf) }
   | '?' { QUERY }
-  | '"'      { read_string (Buffer.create 17) lexbuf }
+  | '\'' { read_atom (Buffer.create 17) lexbuf }
   | ":-" { HOLDS }
-  | int { LITERAL_INT (Int32.(of_string (Lexing.lexeme lexbuf))) }
   | ',' { COMMA }
   | '.' { DOT }
   | '[' { LEFT_DELIM }
@@ -33,9 +32,18 @@ rule read =
   | eof { EOF }
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
 
+and read_atom buf =
+  parse
+  | '\'' { LITERAL_ATOM (Buffer.contents buf) }
+  | [^ '\'']+
+    { Buffer.add_string buf (Lexing.lexeme lexbuf);
+      read_atom buf lexbuf
+    }
+  | eof { raise (SyntaxError ("Quoted atom is not terminated")) }
+
+(*
 and read_string buf =
   parse
-  | '"'       { LITERAL_STRING (Buffer.contents buf) }
   | '\\' '/'  { Buffer.add_char buf '/'; read_string buf lexbuf }
   | '\\' '\\' { Buffer.add_char buf '\\'; read_string buf lexbuf }
   | '\\' 'b'  { Buffer.add_char buf '\b'; read_string buf lexbuf }
@@ -49,3 +57,4 @@ and read_string buf =
     }
   | _ { raise (SyntaxError ("Illegal string character: " ^ Lexing.lexeme lexbuf)) }
   | eof { raise (SyntaxError ("String is not terminated")) }
+*)

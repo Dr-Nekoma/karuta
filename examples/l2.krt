@@ -4,6 +4,5 @@ q[H, J].
 r[K, L].
 
 p[A, B, C] :-
-    q[A, B],
+    q[A, 'an atom with spaces'],
     r[B, C].
-
