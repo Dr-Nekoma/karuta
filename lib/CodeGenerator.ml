@@ -247,7 +247,7 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
       | Functor func as f ->
           let open RegisterAllocator.RegisterMap in
           let (generator, allocator, store), _ =
-            (generate (generator, allocator, store) (Ast.Query func), counter)
+            (generate_functor (generator, allocator, store) func, counter)
           in
           let left_register = cell_register @@ find f registers in
           let instruction = Cell.PutValue (left_register, Cell.X counter) in
@@ -270,6 +270,14 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
   (generator, store)
   |> add_instruction Cell.Deallocate
   |> put_allocator allocator
+
+and generate_functor (generator, ({ registers; _ } as allocator), store)
+    ({ elements; arity; namef } as func : Ast.func) =
+  let open RegisterAllocator.RegisterMap in
+  let register = cell_register @@ find (Ast.Functor func) registers in
+  let instruction = Cell.PutStructure ((namef, arity), register) in
+  let generator, store = add_instruction instruction (generator, store) in
+  List.fold_left Argument.emit_functor (generator, allocator, store) elements
 
 and generate
     ((generator, allocator, store) : t * RegisterAllocator.t * Cell.t Store.t)
