@@ -24,6 +24,7 @@ module Cell = struct
     | Reference of int
     | Functor of string * int
     | Address of int
+    | ArgCount of int
     | Instruction of instruction
     | Empty
   [@@deriving show]

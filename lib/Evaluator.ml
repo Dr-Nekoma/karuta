@@ -208,6 +208,58 @@ let deallocate ({ e_register; store; _ } as computer) : Machine.t =
 
 let instruction_size = 1
 
+let try_me_else (l : int)
+    ({
+       e_register;
+       b_register;
+       cp_register;
+       h_register;
+       tr_register;
+       p_register;
+       store;
+       arg_count;
+       x_registers;
+       _;
+     } as computer) : Machine.t =
+  let new_b =
+    if b_register <= e_register then
+      match Store.stack_get store (e_register + 2) with
+      | Cell.Address n -> n + e_register + 3
+      | _ -> failwith "unreachable try-me-else 0"
+    else
+      match Store.stack_get store b_register with
+      | Cell.Address n -> n + b_register + 7
+      | _ -> failwith "unreachable try-me-else 1"
+  in
+  let save_arguments store =
+    let folder acc idx =
+      let arg =
+        let open Machine.IntMap in
+        find idx x_registers
+      in
+      Store.stack_put arg (new_b + idx) acc
+    in
+    let open Batteries in
+    List.fold_left folder store (List.of_enum (0 -- arg_count))
+  in
+  store
+  |> Store.stack_put (Machine.Cell.ArgCount arg_count) new_b
+  |> save_arguments
+  |> Store.stack_put (Machine.Cell.Address e_register) (new_b + arg_count + 1)
+  |> Store.stack_put (Machine.Cell.Address cp_register) (new_b + arg_count + 2)
+  |> Store.stack_put (Machine.Cell.Address b_register) (new_b + arg_count + 3)
+  |> Store.stack_put (Machine.Cell.Address l) (new_b + arg_count + 4)
+  |> Store.stack_put (Machine.Cell.Address tr_register) (new_b + arg_count + 5)
+  |> Store.stack_put (Machine.Cell.Address h_register) (new_b + arg_count + 6)
+  |> fun store ->
+  {
+    computer with
+    b_register = new_b;
+    hb_register = h_register;
+    p_register = p_register + instruction_size;
+    store;
+  }
+
 let backtrack ({ store; b_register; _ } as computer) : Machine.t =
   let addr =
     match Store.stack_get store b_register with

@@ -16,6 +16,7 @@ module type Memory = sig
   val heap_start : int
   val stack_start : int
   val pdl_start : int
+  val trail_start : int
   val mem_size : int
 
   (* Code Operations *)
@@ -81,6 +82,7 @@ module Make (Layout : Layout) : Memory = struct
   let pdl_tracker = ref (mem_size - 1)
   let stack_start = heap_start + Layout.heap_size
   let pdl_start = stack_start + Layout.stack_size
+  let trail_start = pdl_start + Layout.trail_pdl_size
 
   let heap_get (mem : 'a t) (index : int) : 'a =
     limited_get heap_start Layout.heap_size mem index
