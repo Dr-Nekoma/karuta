@@ -16,6 +16,9 @@ module Cell = struct
     | Proceed
     | Allocate of int
     | Deallocate
+    | TryMeElse of int
+    | ReryMeElse of int
+    | TrustMe
     | Halt
   [@@deriving show]
 
