@@ -208,13 +208,28 @@ let deallocate ({ e_register; store; _ } as computer) : Machine.t =
 
 let instruction_size = 1
 
+let backtrack ({ store; b_register; _ } as computer) : Machine.t =
+  let addr =
+    match Store.stack_get store b_register with
+    | Cell.Address n -> b_register + n + 4
+    | _ -> failwith "unreachable backtrack 0"
+  in
+  match Store.stack_get store addr with
+  | Cell.Address n -> { computer with p_register = n }
+  | _ -> failwith "unreachable backtrack 1"
+
 let allocate (n : int)
-    ({ store; e_register; cp_register; p_register; _ } as computer) : Machine.t
-    =
+    ({ store; e_register; b_register; cp_register; p_register; _ } as computer)
+    : Machine.t =
   let new_e =
-    match Store.stack_get store (e_register + 2) with
-    | Cell.Address n -> n + e_register + 3
-    | _ -> failwith "unreachable allocate"
+    if b_register <= e_register then
+      match Store.stack_get store (e_register + 2) with
+      | Cell.Address n -> n + e_register + 3
+      | _ -> failwith "unreachable allocate"
+    else
+      match Store.stack_get store b_register with
+      | Cell.Address n -> n + b_register + 7
+      | _ -> failwith "unreachable allocate"
   in
   store
   |> Store.stack_put (Cell.Address e_register) new_e
@@ -234,6 +249,7 @@ let call (functor' : Ast.tag * int) (functor_table : Compiler.functor_map)
   {
     computer with
     cp_register = p_register + instruction_size;
+    arg_count = snd functor';
     p_register = find functor' functor_table;
   }
 
