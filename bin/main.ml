@@ -45,7 +45,9 @@ let _ =
         Lib.Machine.initialize ()
         |> (fun initialComputer ->
              Lib.Compiler.compile
-               (decls_queries, Lib.Compiler.initialize (), initialComputer.store)
+               ( Lib.Preprocessor.group_clauses decls_queries,
+                 Lib.Compiler.initialize (),
+                 initialComputer.store )
              |> bimap Fun.id (update_store initialComputer))
         |> halt_program
       in

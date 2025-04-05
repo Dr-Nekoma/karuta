@@ -5,6 +5,7 @@ type t =
   | Functor of func
   | Declaration of decl
   | Query of func
+  | MultiDeclaration of (tag * int * decl list)
 [@@deriving show, ord]
 
 and var = { namev : tag } [@@deriving show, ord]
