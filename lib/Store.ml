@@ -13,6 +13,7 @@ module type Memory = sig
   val empty : 'a t
   val initialize : 'a t -> int -> 'a -> 'a t
   val get : 'a t -> int -> 'a
+  val put : 'a -> int -> 'a t -> 'a t
   val heap_start : int
   val stack_start : int
   val pdl_start : int
@@ -30,6 +31,9 @@ module type Memory = sig
   (* Stack Operations *)
   val stack_get : 'a t -> int -> 'a
   val stack_put : 'a -> int -> 'a t -> 'a t
+
+  (* Trail Operations *)
+  val trail_get : 'a t -> int -> 'a
 
   (* PDL Operations *)
   val pdl_push : 'a -> 'a t -> 'a t
@@ -95,6 +99,10 @@ module Make (Layout : Layout) : Memory = struct
 
   let stack_put (elem : 'a) (index : int) (mem : 'a t) : 'a t =
     limited_put stack_start Layout.stack_size elem index mem
+
+  (* TODO: trail size is variable! *)
+  let trail_get (mem : 'a t) (index : int) : 'a =
+    limited_get trail_start Layout.trail_pdl_size mem index
 
   (* TODO: Add top of trail as an argument to be checked*)
   let pdl_push (elem : 'a) (mem : 'a t) : 'a t =

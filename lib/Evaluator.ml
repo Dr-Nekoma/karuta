@@ -237,7 +237,7 @@ let try_me_else (l : int)
         let open Machine.IntMap in
         find idx x_registers
       in
-      Store.stack_put arg (new_b + idx) acc
+      Store.stack_put arg (new_b + idx + 1) acc
     in
     let open Batteries in
     List.fold_left folder store (List.of_enum (0 -- arg_count))
@@ -258,6 +258,109 @@ let try_me_else (l : int)
     hb_register = h_register;
     p_register = p_register + instruction_size;
     store;
+  }
+
+let unwind_trail (a1 : int) (a2 : int) (store : Cell.t Store.t) : Cell.t Store.t
+    =
+  let folder acc idx =
+    let trail_value = Store.trail_get acc idx |> Cell.address_from_cell in
+    let cell = Cell.Reference trail_value in
+    Store.put cell trail_value acc
+  in
+  let open Batteries in
+  List.fold_left folder store (List.of_enum (a1 -- a2))
+
+let retry_me_else (l : int)
+    ({ b_register; p_register; store; tr_register; x_registers; _ } as computer)
+    : Machine.t =
+  let n =
+    match Store.stack_get store b_register with
+    | Cell.ArgCount count -> count
+    | _ -> failwith "unreachable retry-me-else 0"
+  in
+  let restored_registers =
+    let folder acc idx =
+      let arg =
+        match Store.stack_get store (b_register + idx + 1) with
+        | Cell.Address _ | Cell.Empty | Cell.ArgCount _ | Cell.Instruction _
+        | Cell.Functor _ ->
+            failwith "unreachable retry-me-else 1"
+        | savable -> savable
+      in
+      let open Machine.IntMap in
+      add idx arg acc
+    in
+    let open Batteries in
+    List.fold_left folder x_registers (List.of_enum (0 -- n))
+  in
+  store
+  |> Store.stack_put (Machine.Cell.Address l) (b_register + n + 4)
+  |> unwind_trail
+       (Store.stack_get store (b_register + n + 5) |> Cell.address_from_cell)
+       tr_register
+  |> fun store ->
+  {
+    computer with
+    store;
+    x_registers = restored_registers;
+    e_register =
+      Store.stack_get store (b_register + n + 1) |> Cell.address_from_cell;
+    cp_register =
+      Store.stack_get store (b_register + n + 2) |> Cell.address_from_cell;
+    tr_register =
+      Store.stack_get store (b_register + n + 5) |> Cell.address_from_cell;
+    h_register =
+      Store.stack_get store (b_register + n + 6) |> Cell.address_from_cell;
+    hb_register =
+      Store.stack_get store (b_register + n + 6) |> Cell.address_from_cell;
+    p_register = p_register + instruction_size;
+  }
+
+let trust_me
+    ({ b_register; p_register; tr_register; store; x_registers; _ } as computer)
+    : Machine.t =
+  let n =
+    match Store.stack_get store b_register with
+    | Cell.ArgCount count -> count
+    | _ -> failwith "unreachable trust-me 0"
+  in
+  let restored_registers =
+    let folder acc idx =
+      let arg =
+        match Store.stack_get store (b_register + idx + 1) with
+        | Cell.Address _ | Cell.Empty | Cell.ArgCount _ | Cell.Instruction _
+        | Cell.Functor _ ->
+            failwith "unreachable trust-me 1"
+        | savable -> savable
+      in
+      let open Machine.IntMap in
+      add idx arg acc
+    in
+    let open Batteries in
+    List.fold_left folder x_registers (List.of_enum (0 -- n))
+  in
+  store
+  |> unwind_trail
+       (Store.stack_get store (b_register + n + 5) |> Cell.address_from_cell)
+       tr_register
+  |> fun store ->
+  {
+    computer with
+    store;
+    x_registers = restored_registers;
+    e_register =
+      Store.stack_get store (b_register + n + 1) |> Cell.address_from_cell;
+    cp_register =
+      Store.stack_get store (b_register + n + 2) |> Cell.address_from_cell;
+    tr_register =
+      Store.stack_get store (b_register + n + 5) |> Cell.address_from_cell;
+    h_register =
+      Store.stack_get store (b_register + n + 6) |> Cell.address_from_cell;
+    hb_register =
+      Store.stack_get store (b_register + n + 6) |> Cell.address_from_cell;
+    b_register =
+      Store.stack_get store (b_register + n + 3) |> Cell.address_from_cell;
+    p_register = p_register + instruction_size;
   }
 
 let backtrack ({ store; b_register; _ } as computer) : Machine.t =
@@ -377,7 +480,10 @@ let eval_step (functor_table : Compiler.functor_map)
           ({ (deallocate computer) with p_register = p_register + 1 }, false)
       | Call predicate -> (call predicate functor_table computer, false)
       | Proceed -> (proceed computer, false)
-      | Halt -> (computer, true))
+      | Halt -> (computer, true)
+      | TryMeElse l -> (try_me_else l computer, false)
+      | RetryMeElse l -> (retry_me_else l computer, false)
+      | TrustMe -> (trust_me computer, false))
   | _ -> failwith "unreachable eval_step"
 
 let rec eval (functor_table : Compiler.functor_map) (computer : Machine.t) :
