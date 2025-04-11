@@ -1,8 +1,8 @@
-module RegisterMap = BatMap.Make (Ast)
+module RegisterMap = BatMap.Make (Ast.Expr)
 module VariableMap = BatMap.Make (String)
 module FT = BatFingerTree
 
-type term_queue = Ast.t FT.t
+type term_queue = Ast.Expr.t FT.t
 
 module S = BatSet
 
@@ -22,7 +22,7 @@ let show_registers (registers : register RegisterMap.t) : string =
   let open RegisterMap in
   BatSeq.fold_left
     (fun acc (term, register) ->
-      acc ^ "\n" ^ Ast.show term ^ " = " ^ show_register register)
+      acc ^ "\n" ^ Ast.show_expr term ^ " = " ^ show_register register)
     "" (to_seq registers)
 [@@warning "-32"]
 
@@ -52,7 +52,7 @@ let initial_allocator : t =
 
 let rec allocate
     ({ registers; permanent_variables; x_register; y_register; _ } as allocator)
-    (elem : Ast.t) : t =
+    (elem : Ast.expr) : t =
   let register, x_register, y_register =
     match elem with
     | Variable { namev } -> (
@@ -71,9 +71,7 @@ and allocate_loop : t -> term_queue -> t =
   | None -> allocator
   | Some (rest, d) -> (
       match d with
-      | Declaration _ -> failwith "unreachable register_alloc_loop"
       | Variable v -> allocate_variable v allocator rest
-      | Query _ -> failwith "there's no such thing as a nested query"
       | Functor f -> allocate_functor f allocator rest)
 
 and allocate_functor : Ast.func -> t -> term_queue -> t =
@@ -89,9 +87,8 @@ and allocate_variable : Ast.var -> t -> term_queue -> t =
     | None -> allocate_loop (allocate allocator (Ast.Variable var)) terms
     | Some _ -> allocate_loop allocator terms
 
-and variables_of_term (elem : Ast.t) : string S.t =
+and variables_of_term (elem : Ast.expr) : string S.t =
   match elem with
-  | Declaration _ | Query _ -> failwith "unreachable extract_variables"
   | Functor { elements; _ } ->
       List.fold_left
         (fun acc e -> S.union acc @@ variables_of_term e)
@@ -138,7 +135,6 @@ and allocate_declaration : Ast.func -> Ast.func list -> t =
 and allocate_query : Ast.func -> t =
  fun { elements; _ } -> allocate_loop initial_allocator (FT.of_list elements)
 
-let allocate_toplevel : Ast.t -> t = function
-  | Variable _ | Functor _ -> failwith "not top level forms"
+let allocate_toplevel : Ast.clause -> t = function
   | Declaration { head; body } -> allocate_declaration head body
   | Query func -> allocate_query func

@@ -43,7 +43,7 @@ module type Fact = sig
   val emit_argument :
     t * RegisterAllocator.t * Cell.t Store.t ->
     int ->
-    Ast.t ->
+    Ast.expr ->
     t * RegisterAllocator.t * Cell.t Store.t
 
   val emit_queue_arguments :
@@ -56,7 +56,7 @@ module Fact : Fact = struct
       (( ({ terms; variables; _ } as generator),
          ({ registers; _ } as allocator),
          store ) :
-        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.t) :
+        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.expr) :
       t * RegisterAllocator.t * Cell.t Store.t =
     let open RegisterAllocator.RegisterMap in
     let register = cell_register @@ find elem registers in
@@ -67,11 +67,10 @@ module Fact : Fact = struct
         ({ generator with variables = S.add namev variables }, allocator, store)
     | Functor _ as f ->
         ({ generator with terms = FT.cons terms f }, allocator, store)
-    | _ -> failwith "unreachable emit_nested_fact_argument"
 
   and emit_queue_nested_argument
       ((generator, ({ registers; _ } as allocator), store) :
-        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.t) :
+        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.expr) :
       t * RegisterAllocator.t * Cell.t Store.t =
     let open RegisterAllocator.RegisterMap in
     let register = cell_register @@ find elem registers in
@@ -87,7 +86,6 @@ module Fact : Fact = struct
         List.fold_left emit_nested_argument
           (generator, allocator, store)
           elements
-    | _ -> failwith "unreachable emit_queue_nested_fact_argument"
 
   and emit_queue_arguments
       ((({ terms; _ } as generator), allocator, store) :
@@ -103,8 +101,8 @@ module Fact : Fact = struct
 
   and emit_argument
       ((({ variables; _ } as generator), ({ registers; _ } as allocator), store) :
-        t * RegisterAllocator.t * Cell.t Store.t) (index : int) (elem : Ast.t) :
-      t * RegisterAllocator.t * Cell.t Store.t =
+        t * RegisterAllocator.t * Cell.t Store.t) (index : int)
+      (elem : Ast.expr) : t * RegisterAllocator.t * Cell.t Store.t =
     let open RegisterAllocator.RegisterMap in
     let register = cell_register @@ find elem registers in
     let arg_register = Cell.X index in
@@ -124,18 +122,17 @@ module Fact : Fact = struct
         List.fold_left emit_nested_argument
           (generator, allocator, store)
           elements
-    | _ -> failwith "unreachable emit_fact_argument"
 end
 
 module type Argument = sig
   val emit_query :
     t * RegisterAllocator.t * Cell.t Store.t ->
-    Ast.t ->
+    Ast.expr ->
     t * RegisterAllocator.t * Cell.t Store.t
 
   val emit_functor :
     t * RegisterAllocator.t * Cell.t Store.t ->
-    Ast.t ->
+    Ast.expr ->
     t * RegisterAllocator.t * Cell.t Store.t
 end
 
@@ -146,7 +143,7 @@ module Argument : Argument = struct
         * (Cell.register -> Cell.instruction)
         * (Cell.register -> Cell.instruction))
       ((({ variables; _ } as generator), ({ registers; _ } as allocator), store) :
-        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.t) :
+        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.expr) :
       t * RegisterAllocator.t * Cell.t Store.t =
     let open RegisterAllocator.RegisterMap in
     let register = cell_register @@ find elem registers in
@@ -168,7 +165,7 @@ module Argument : Argument = struct
 
   and emit_query
       ((generator, ({ registers; _ } as allocator), store) :
-        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.t) :
+        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.expr) :
       t * RegisterAllocator.t * Cell.t Store.t =
     let emit_toplevel_query_argument =
       emit_argument
@@ -227,7 +224,7 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
              store ),
            counter ) :
           (t * RegisterAllocator.t * Cell.t Store.t) * int)
-        (individual_element : Ast.t) :
+        (individual_element : Ast.expr) :
         (t * RegisterAllocator.t * Cell.t Store.t) * int =
       match individual_element with
       | Variable _ as var ->
@@ -250,7 +247,7 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
       | Functor func as f ->
           let open RegisterAllocator.RegisterMap in
           let (generator, allocator, store), _ =
-            (generate (generator, allocator, store) (Ast.Query func), counter)
+            (generate_functor (generator, allocator, store) func, counter)
           in
           let left_register = cell_register @@ find f registers in
           let instruction = Cell.PutValue (left_register, Cell.X counter) in
@@ -258,7 +255,6 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
             add_instruction instruction (generator, store)
           in
           ((generator, allocator, store), counter + 1)
-      | _ -> failwith "unreachable allocate_body"
     in
     let (generator, allocator, store), _ =
       List.fold_left allocate_argument
@@ -275,11 +271,17 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
   |> add_instruction Cell.Deallocate
   |> put_allocator allocator
 
-and generate
-    ((generator, ({ registers; _ } as allocator), store) :
-      t * RegisterAllocator.t * Cell.t Store.t) (value : Ast.t) :
-    t * RegisterAllocator.t * Cell.t Store.t =
+and generate_functor (generator, ({ registers; _ } as allocator), store)
+    ({ elements; arity; namef } as func : Ast.func) =
   let open RegisterAllocator.RegisterMap in
+  let register = cell_register @@ find (Ast.Functor func) registers in
+  let instruction = Cell.PutStructure ((namef, arity), register) in
+  let generator, store = add_instruction instruction (generator, store) in
+  List.fold_left Argument.emit_functor (generator, allocator, store) elements
+
+and generate
+    ((generator, allocator, store) : t * RegisterAllocator.t * Cell.t Store.t)
+    (value : Ast.clause) : t * RegisterAllocator.t * Cell.t Store.t =
   match value with
   | Query { namef; elements; arity } ->
       let generator, allocator, store =
@@ -294,18 +296,6 @@ and generate
       |> (fun (generator, store) ->
            ({ generator with variables = S.empty }, store))
       |> put_allocator allocator
-  | Functor { namef; elements; arity } ->
-      let register = cell_register @@ find value registers in
-      let instruction = Cell.GetStructure ((namef, arity), register) in
-      let generator, store = add_instruction instruction (generator, store) in
-      let gas =
-        List.fold_left Argument.emit_functor
-          (generator, allocator, store)
-          elements
-      in
-      let generator, allocator, store = List.fold_left generate gas elements in
-      ({ generator with variables = S.empty }, allocator, store)
-  | Variable _ -> (generator, allocator, store)
   | Declaration { head = { elements; _ }; body = [] } ->
       let gas =
         Seq.fold_lefti Fact.emit_argument

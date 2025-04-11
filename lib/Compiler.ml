@@ -17,20 +17,18 @@ type t = {
 let initialize () : t =
   { entry_point = None; p_register = 0; functor_table = FunctorMap.empty }
 
-let rec allocate_registers (elem : Ast.t) : RegisterAllocator.t =
+let rec allocate_registers (elem : Ast.clause) : RegisterAllocator.t =
   match elem with
-  | Variable _ | Functor _ -> failwith "not top level forms"
   | (Declaration _ | Query _) as form ->
       RegisterAllocator.allocate_toplevel form
 
 and compile :
-    Ast.t list * t * Machine.Cell.t Machine.Store.t ->
+    Ast.clause list * t * Machine.Cell.t Machine.Store.t ->
     t * Machine.Cell.t Machine.Store.t = function
   | [], compiler, store -> (compiler, store)
   | d :: ds, ({ entry_point; p_register; functor_table } as compiler), store
     -> (
       match d with
-      | Variable _ | Functor _ -> failwith "unreachable compile"
       | Declaration { head; _ } as form ->
           let open FunctorMap in
           ( allocate_registers form |> fun allocator ->
