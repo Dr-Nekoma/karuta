@@ -17,7 +17,7 @@ module Cell = struct
     | Allocate of int
     | Deallocate
     | TryMeElse of int
-    | ReryMeElse of int
+    | RetryMeElse of int
     | TrustMe
     | Halt
   [@@deriving show]
@@ -31,6 +31,9 @@ module Cell = struct
     | Instruction of instruction
     | Empty
   [@@deriving show]
+
+  let address_from_cell (cell : t) : int =
+    match cell with Address n -> n | _ -> failwith "of_address"
 end
 
 module Mode = struct
