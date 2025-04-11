@@ -16,6 +16,9 @@ module Cell = struct
     | Proceed
     | Allocate of int
     | Deallocate
+    | TryMeElse of int
+    | ReryMeElse of int
+    | TrustMe
     | Halt
   [@@deriving show]
 
@@ -24,6 +27,7 @@ module Cell = struct
     | Reference of int
     | Functor of string * int
     | Address of int
+    | ArgCount of int
     | Instruction of instruction
     | Empty
   [@@deriving show]
@@ -46,13 +50,17 @@ module IntMap = Map.Make (Int)
 
 type t = {
   store : Cell.t Store.t;
+  arg_count : int;
   x_registers : Cell.t IntMap.t;
   (* Cell.t IM.t; *)
+  b_register : int;
   h_register : int;
+  hb_register : int;
   s_register : int;
   p_register : int;
   cp_register : int;
   e_register : int;
+  tr_register : int;
   mode : Mode.t;
   fail : bool;
 }
@@ -79,12 +87,16 @@ let show_x_registers (registers : Cell.t IntMap.t) : string =
 let initialize () : t =
   {
     store = Store.initialize Store.empty Store.mem_size Cell.Empty;
+    arg_count = 0;
     x_registers = IntMap.empty;
     p_register = 0;
     cp_register = 0;
     e_register = Store.stack_start;
+    b_register = Store.stack_start;
     h_register = Store.heap_start;
+    hb_register = Store.heap_start;
     s_register = Store.heap_start;
+    tr_register = Store.trail_start;
     mode = Mode.Read;
     fail = false;
   }

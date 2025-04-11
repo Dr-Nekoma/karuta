@@ -15,6 +15,8 @@ module type Memory = sig
   val get : 'a t -> int -> 'a
   val heap_start : int
   val stack_start : int
+  val pdl_start : int
+  val trail_start : int
   val mem_size : int
 
   (* Code Operations *)
@@ -79,7 +81,8 @@ module Make (Layout : Layout) : Memory = struct
   let heap_start = Layout.code_size
   let pdl_tracker = ref (mem_size - 1)
   let stack_start = heap_start + Layout.heap_size
-  let trail_start = stack_start + Layout.stack_size
+  let pdl_start = stack_start + Layout.stack_size
+  let trail_start = pdl_start + Layout.trail_pdl_size
 
   let heap_get (mem : 'a t) (index : int) : 'a =
     limited_get heap_start Layout.heap_size mem index
@@ -95,7 +98,7 @@ module Make (Layout : Layout) : Memory = struct
 
   (* TODO: Add top of trail as an argument to be checked*)
   let pdl_push (elem : 'a) (mem : 'a t) : 'a t =
-    if !pdl_tracker < trail_start then failwith "Stack is full!"
+    if !pdl_tracker < pdl_start then failwith "Stack is full!"
     else pdl_tracker := !pdl_tracker - 1;
     put elem (!pdl_tracker + 1) mem
 
