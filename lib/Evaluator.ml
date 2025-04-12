@@ -380,11 +380,11 @@ let allocate (n : int)
     if b_register <= e_register then
       match Store.stack_get store (e_register + 2) with
       | Cell.Address n -> n + e_register + 3
-      | _ -> failwith "unreachable allocate"
+      | _ -> failwith "unreachable allocate 0"
     else
       match Store.stack_get store b_register with
       | Cell.Address n -> n + b_register + 7
-      | _ -> failwith "unreachable allocate"
+      | _ -> failwith "unreachable allocate 1"
   in
   store
   |> Store.stack_put (Cell.Address e_register) new_e
@@ -417,7 +417,7 @@ let eval_step (functor_table : Compiler.functor_map)
   (* print_endline @@ string_of_int p_register; *)
   match Store.code_get store p_register with
   | Instruction instruction -> (
-      (* print_endline @@ Machine.Cell.show_instruction instruction; *)
+      print_endline @@ Machine.Cell.show_instruction instruction;
       match instruction with
       | GetStructure ((name, arity), register) ->
           ( {

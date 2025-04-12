@@ -279,11 +279,52 @@ and generate_functor (generator, ({ registers; _ } as allocator), store)
   let generator, store = add_instruction instruction (generator, store) in
   List.fold_left Argument.emit_functor (generator, allocator, store) elements
 
+and swap_allocators (allocators : RegisterAllocator.t list)
+    ((generator, _, store) : t * RegisterAllocator.t * Cell.t Store.t) :
+    t * RegisterAllocator.t list * Cell.t Store.t =
+  (generator, allocators, store)
+
+and generate_single_declaration (decl : Ast.decl)
+    ((generator, allocator :: allocators, store) :
+      t * RegisterAllocator.t list * Cell.t Store.t) :
+    t * RegisterAllocator.t list * Cell.t Store.t =
+  match decl with
+  | { head = { elements; _ }; body = [] } ->
+      let gas =
+        Seq.fold_lefti Fact.emit_argument
+          (generator, allocator, store)
+          (List.to_seq elements)
+      in
+      let generator, allocator, store = Fact.emit_queue_arguments gas in
+      (generator, store)
+      |> add_instruction Cell.Proceed
+      |> put_allocator allocator |> swap_allocators allocators
+  | { head; body } ->
+      (generator, allocator, store)
+      |> allocate_head head |> allocate_body body |> swap_allocators allocators
+
+and generate_declaration_and_patch (inst : int -> Cell.instruction)
+    (decl : Ast.decl)
+    ((generator, allocators, store) :
+      t * RegisterAllocator.t list * Cell.t Store.t) :
+    t * RegisterAllocator.t list * Cell.t Store.t =
+  let address_to_patch = generator.p_register in
+  (generator, store) |> add_instruction Cell.Halt (* Placeholder *)
+  |> fun (generator, store) ->
+  (generator, allocators, store) |> generate_single_declaration decl
+  |> fun (({ p_register; _ } as generator), allocators, store) ->
+  ( generator,
+    allocators,
+    Store.code_put (Cell.Instruction (inst p_register)) address_to_patch store
+  )
+
 and generate
-    ((generator, allocator, store) : t * RegisterAllocator.t * Cell.t Store.t)
-    (value : Ast.clause) : t * RegisterAllocator.t * Cell.t Store.t =
+    ((generator, allocators, store) :
+      t * RegisterAllocator.t list * Cell.t Store.t) (value : Ast.clause) :
+    t * RegisterAllocator.t list * Cell.t Store.t =
   match value with
-  | Query { namef; elements; arity } ->
+  | QueryConjunction { namef; elements; arity } ->
+      let (allocator :: allocators) = allocators in
       let generator, allocator, store =
         List.fold_left Argument.emit_query
           (generator, allocator, store)
@@ -296,15 +337,24 @@ and generate
       |> (fun (generator, store) ->
            ({ generator with variables = S.empty }, store))
       |> put_allocator allocator
-  | Declaration { head = { elements; _ }; body = [] } ->
-      let gas =
-        Seq.fold_lefti Fact.emit_argument
-          (generator, allocator, store)
-          (List.to_seq elements)
+      |> swap_allocators allocators (* TODO: deal with multiple queries *)
+  | MultiDeclaration (decl, []) ->
+      (generator, allocators, store) |> generate_single_declaration decl
+  | MultiDeclaration (first, decls) ->
+      let rec split_last (l : 'a list) : 'a list * 'a =
+        match l with
+        | [] -> failwith "impossible"
+        | [ final ] -> ([], final)
+        | first :: rest ->
+            let left, final = split_last rest in
+            (first :: left, final)
       in
-      let generator, allocator, store = Fact.emit_queue_arguments gas in
-      (generator, store)
-      |> add_instruction Cell.Proceed
-      |> put_allocator allocator
-  | Declaration { head; body } ->
-      (generator, allocator, store) |> allocate_head head |> allocate_body body
+      let middle_decls, last_decl = split_last decls in
+      (generator, allocators, store)
+      |> generate_declaration_and_patch (fun n -> Cell.TryMeElse n) first
+      |> fun acc ->
+      List.fold_left
+        (Fun.flip
+        @@ generate_declaration_and_patch (fun n -> Cell.RetryMeElse n))
+        acc middle_decls
+      |> generate_declaration_and_patch (Fun.const Cell.TrustMe) last_decl

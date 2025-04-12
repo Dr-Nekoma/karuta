@@ -95,8 +95,8 @@ and variables_of_term (elem : Ast.expr) : string S.t =
         S.empty elements
   | Variable { namev } -> S.add namev S.empty
 
-and allocate_declaration : Ast.func -> Ast.func list -> t =
- fun ({ elements; _ } as head) body ->
+and allocate_declaration : Ast.decl -> t =
+ fun { head = { elements; _ } as head; body } ->
   let first_clause, other_clauses =
     match body with
     | [] -> ([], [])
@@ -135,6 +135,7 @@ and allocate_declaration : Ast.func -> Ast.func list -> t =
 and allocate_query : Ast.func -> t =
  fun { elements; _ } -> allocate_loop initial_allocator (FT.of_list elements)
 
-let allocate_toplevel : Ast.clause -> t = function
-  | Declaration { head; body } -> allocate_declaration head body
-  | Query func -> allocate_query func
+let allocate_toplevel : Ast.clause -> t list = function
+  | MultiDeclaration (first, decls) ->
+      allocate_declaration first :: List.map allocate_declaration decls
+  | QueryConjunction func -> [ allocate_query func ]

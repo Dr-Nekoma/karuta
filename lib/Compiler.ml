@@ -17,9 +17,9 @@ type t = {
 let initialize () : t =
   { entry_point = None; p_register = 0; functor_table = FunctorMap.empty }
 
-let rec allocate_registers (elem : Ast.clause) : RegisterAllocator.t =
+let rec allocate_registers (elem : Ast.clause) : RegisterAllocator.t list =
   match elem with
-  | (Declaration _ | Query _) as form ->
+  | (MultiDeclaration _ | QueryConjunction _) as form ->
       RegisterAllocator.allocate_toplevel form
 
 and compile :
@@ -29,11 +29,11 @@ and compile :
   | d :: ds, ({ entry_point; p_register; functor_table } as compiler), store
     -> (
       match d with
-      | Declaration { head; _ } as form ->
+      | MultiDeclaration ({ head; _ }, _) as form ->
           let open FunctorMap in
-          ( allocate_registers form |> fun allocator ->
+          ( allocate_registers form |> fun allocators ->
             CodeGenerator.generate
-              (CodeGenerator.initialize p_register, allocator, store)
+              (CodeGenerator.initialize p_register, allocators, store)
               form )
           |> fun (code_generator, _, store) ->
           compile
@@ -45,7 +45,7 @@ and compile :
                   add (head.namef, head.arity) p_register functor_table;
               },
               store )
-      | Query _ as form ->
+      | QueryConjunction _ as form ->
           let entry_point =
             match entry_point with
             | None -> Some { p_register }
