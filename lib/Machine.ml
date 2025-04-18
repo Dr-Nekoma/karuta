@@ -74,10 +74,12 @@ let show_store (store : Cell.t Store.t) (how_many : int option) : string =
     | None -> l
     | Some x -> List.to_seq l |> Seq.take x |> List.of_seq
   in
-  List.fold_left
-    (fun acc elem -> acc ^ " " ^ Cell.show elem)
-    ""
-    (limit_list @@ Store.to_list store)
+  fst
+  @@ List.fold_left
+       (fun (s, n) elem ->
+         (s ^ string_of_int n ^ ": " ^ " " ^ Cell.show elem ^ "\n", n + 1))
+       ("", 0)
+       (limit_list @@ Store.to_list store)
 
 let show_x_registers (registers : Cell.t IntMap.t) : string =
   let open IntMap in
@@ -94,8 +96,8 @@ let initialize () : t =
     x_registers = IntMap.empty;
     p_register = 0;
     cp_register = 0;
-    e_register = Store.stack_start;
-    b_register = Store.stack_start;
+    e_register = Store.stack_start - 1;
+    b_register = Store.stack_start - 1;
     h_register = Store.heap_start;
     hb_register = Store.heap_start;
     s_register = Store.heap_start;

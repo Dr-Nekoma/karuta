@@ -199,12 +199,15 @@ let get_variable (x_register : Cell.register) (a_register : Cell.register)
 let get_value = unify
 
 let deallocate ({ e_register; store; _ } as computer) : Machine.t =
-  let p_register = Store.stack_get store (e_register + 1) in
-  let e_register = Store.stack_get store e_register in
-  match (p_register, e_register) with
-  | Cell.Address p_register, Cell.Address e_register ->
-      { computer with p_register; e_register }
-  | _ -> failwith "unreachable"
+  if e_register < Store.stack_start then
+    failwith "tried to return from top level"
+  else
+    let p_register = Store.stack_get store (e_register + 1) in
+    let e_register = Store.stack_get store e_register in
+    match (p_register, e_register) with
+    | Cell.Address p_register, Cell.Address e_register ->
+        { computer with p_register; e_register }
+    | _ -> failwith "unreachable deallocate"
 
 let instruction_size = 1
 
@@ -379,10 +382,12 @@ let allocate (n : int)
   let new_e =
     if b_register <= e_register then
       match Store.stack_get store (e_register + 2) with
+      | _ when e_register < Store.stack_start -> e_register + 3
       | Cell.Address n -> n + e_register + 3
       | _ -> failwith "unreachable allocate 0"
     else
       match Store.stack_get store b_register with
+      | _ when b_register < Store.stack_start -> b_register + 7
       | Cell.Address n -> n + b_register + 7
       | _ -> failwith "unreachable allocate 1"
   in
@@ -476,8 +481,7 @@ let eval_step (functor_table : Compiler.functor_map)
           ( { (unify_value register computer) with p_register = p_register + 1 },
             false )
       | Allocate n -> (allocate n computer, false)
-      | Deallocate ->
-          ({ (deallocate computer) with p_register = p_register + 1 }, false)
+      | Deallocate -> (deallocate computer, false)
       | Call predicate -> (call predicate functor_table computer, false)
       | Proceed -> (proceed computer, false)
       | Halt -> (computer, true)
