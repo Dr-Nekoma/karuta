@@ -116,7 +116,8 @@ module Fact : Fact = struct
     | Variable { namev } ->
         let variables, instruction =
           match S.find_opt namev variables with
-          | None -> (S.add namev variables, Cell.UnifyVariable arg_register)
+          | None ->
+              (S.add namev variables, Cell.GetVariable (register, arg_register))
           | Some _ -> (variables, Cell.GetValue (register, arg_register))
         in
         ({ generator with variables }, store)
