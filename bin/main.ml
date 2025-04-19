@@ -11,20 +11,6 @@ let show_registers (registers : int Lib.RegisterAllocator.RegisterMap.t) :
     "" (to_seq registers)
 [@@warning "-32"]
 
-(*
-   let halt_program
-       ((compiler, ({ e_register; store; _ } as computer)) :
-         Lib.Compiler.t * Lib.Machine.t) : Lib.Compiler.t * Lib.Machine.t =
-     let open Lib.Machine in
-     let stack_start = e_register in
-     let store =
-       Store.code_put (Cell.Instruction Cell.Halt) compiler.p_register store
-       |> Store.stack_put (Cell.Address stack_start) stack_start
-       |> Store.stack_put (Cell.Address compiler.p_register) (stack_start + 1)
-       |> Store.stack_put (Cell.Address 0) (stack_start + 2)
-     in
-     (compiler, { computer with store })
-*)
 let bimap f g (a1, a2) = (f a1, g a2)
 
 let update_store (computer : Lib.Machine.t)
