@@ -78,7 +78,7 @@ let get_structure ((functor_label, functor_arity) : string * int)
     (register : Cell.register) ({ store; h_register; _ } as computer) :
     Machine.t =
   match get_register register computer with
-  | Address address -> (
+  | Reference address -> (
       let addr = deref address store in
       match Store.heap_get store addr with
       | Reference _ ->
