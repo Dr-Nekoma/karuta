@@ -24,6 +24,12 @@ let initialize (begin_addr : int) : t =
     scope_registers = S.empty;
   }
 
+let reset_variables
+    (({ p_register; _ }, allocators, store) :
+      t * RegisterAllocator.t list * Cell.t Store.t) :
+    t * RegisterAllocator.t list * Cell.t Store.t =
+  (initialize p_register, allocators, store)
+
 let put_allocator (allocator : RegisterAllocator.t)
     ((generator, store) : t * Cell.t Store.t) :
     t * RegisterAllocator.t * Cell.t Store.t =
@@ -299,9 +305,11 @@ and generate_single_declaration (decl : Ast.decl)
       (generator, store)
       |> add_instruction Cell.Proceed
       |> put_allocator allocator |> swap_allocators allocators
+      |> reset_variables
   | { head; body } ->
       (generator, allocator, store)
       |> allocate_head head |> allocate_body body |> swap_allocators allocators
+      |> reset_variables
 
 and generate_declaration_and_patch (inst : int -> Cell.instruction)
     (decl : Ast.decl)
