@@ -99,7 +99,7 @@ let get_structure ((functor_label, functor_arity) : string * int)
       | Structure a -> (
           match Store.heap_get store a with
           | Functor (label, arity)
-            when label == functor_label && arity == functor_arity ->
+            when label = functor_label && arity = functor_arity ->
               { computer with s_register = a + 1; mode = Read }
           | _ -> { computer with fail = true })
       | _ -> { computer with fail = true })
@@ -146,7 +146,7 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
         | Structure v1, Structure v2 -> (
             match (Store.get !mutStore v1, Store.get !mutStore v2) with
             | Functor (s1, n1), Functor (s2, n2) ->
-                if s1 == s2 && n1 == n2 then
+                if s1 = s2 && n1 = n2 then
                   for i = 1 to n1 do
                     mutStore := Store.pdl_push (Address (v1 + i)) !mutStore;
                     mutStore := Store.pdl_push (Address (v2 + i)) !mutStore

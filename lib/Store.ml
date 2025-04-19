@@ -110,7 +110,7 @@ module Make (Layout : Layout) : Memory = struct
     else pdl_tracker := !pdl_tracker - 1;
     put elem (!pdl_tracker + 1) mem
 
-  let pdl_empty (_ : 'a t) : bool = !pdl_tracker == mem_size - 1
+  let pdl_empty (_ : 'a t) : bool = !pdl_tracker = mem_size - 1
 
   let pdl_pop (mem : 'a t) : 'a t =
     if pdl_empty mem then failwith "Stack is empty!"

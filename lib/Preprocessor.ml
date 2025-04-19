@@ -14,7 +14,7 @@ let parser_to_compiler (clause : Ast.parser_clause) : Ast.clause =
 
 let group_clauses (clauses : Ast.parser_clause list) : Ast.clause list =
   let compare_func (f1 : Ast.func) (f2 : Ast.func) : int =
-    if f1.namef == f2.namef && f1.arity == f2.arity then 0 else 1
+    if f1.namef = f2.namef && f1.arity = f2.arity then 0 else 1
   in
   let compare_clauses (c1 : Ast.parser_clause) (c2 : Ast.parser_clause) : int =
     match (c1, c2) with
@@ -25,7 +25,7 @@ let group_clauses (clauses : Ast.parser_clause list) : Ast.clause list =
   let multi_mapper (group : Ast.parser_clause list) : Ast.clause =
     match group with
     | [ x ] -> parser_to_compiler x
-    | Declaration first :: _ as many ->
+    | Declaration first :: many ->
         Ast.MultiDeclaration (first, List.map from_declaration many)
     | _ -> failwith "unreachable group"
   in
