@@ -383,12 +383,12 @@ let allocate (n : int)
     if b_register <= e_register then
       match Store.stack_get store (e_register + 2) with
       | _ when e_register < Store.stack_start -> e_register + 3
-      | Cell.Address n -> n + e_register + 3
+      | Cell.Address n -> n + e_register + 3 (* TODO: replace with ArgCount *)
       | _ -> failwith "unreachable allocate 0"
     else
       match Store.stack_get store b_register with
       | _ when b_register < Store.stack_start -> b_register + 7
-      | Cell.Address n -> n + b_register + 7
+      | Cell.ArgCount n -> n + b_register + 7
       | _ -> failwith "unreachable allocate 1"
   in
   store
