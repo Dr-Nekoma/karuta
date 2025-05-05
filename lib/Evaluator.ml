@@ -211,6 +211,19 @@ let deallocate ({ e_register; store; _ } as computer) : Machine.t =
 
 let instruction_size = 1
 
+let new_stack_pointer { e_register; b_register; store; _ } : int =
+  if b_register < e_register then
+    if e_register < Store.stack_start then e_register + 3
+    else
+      match Store.stack_get store (e_register + 2) with
+      | Cell.ArgCount n -> n + e_register + 3
+      | _ -> failwith "unreachable new_stack_pointer 0"
+  else if b_register < Store.stack_start then b_register + 7
+  else
+    match Store.stack_get store b_register with
+    | Cell.ArgCount n -> n + b_register + 7
+    | _ -> failwith "unreachable new_stack_pointer 1"
+
 let try_me_else (l : int)
     ({
        e_register;
@@ -224,16 +237,7 @@ let try_me_else (l : int)
        x_registers;
        _;
      } as computer) : Machine.t =
-  let new_b =
-    if b_register <= e_register then
-      match Store.stack_get store (e_register + 2) with
-      | Cell.Address n -> n + e_register + 3
-      | _ -> failwith "unreachable try-me-else 0"
-    else
-      match Store.stack_get store b_register with
-      | Cell.Address n -> n + b_register + 7
-      | _ -> failwith "unreachable try-me-else 1"
-  in
+  let new_b = new_stack_pointer computer in
   let save_arguments store =
     let folder acc idx =
       let arg =
@@ -243,7 +247,7 @@ let try_me_else (l : int)
       Store.stack_put arg (new_b + idx + 1) acc
     in
     let open Batteries in
-    List.fold_left folder store (List.of_enum (0 -- arg_count))
+    List.fold_left folder store (List.of_enum (0 --^ arg_count))
   in
   store
   |> Store.stack_put (Machine.Cell.ArgCount arg_count) new_b
@@ -377,24 +381,13 @@ let backtrack ({ store; b_register; _ } as computer) : Machine.t =
   | _ -> failwith "unreachable backtrack 1"
 
 let allocate (n : int)
-    ({ store; e_register; b_register; cp_register; p_register; _ } as computer)
-    : Machine.t =
-  let new_e =
-    if b_register <= e_register then
-      match Store.stack_get store (e_register + 2) with
-      | _ when e_register < Store.stack_start -> e_register + 3
-      | Cell.Address n -> n + e_register + 3 (* TODO: replace with ArgCount *)
-      | _ -> failwith "unreachable allocate 0"
-    else
-      match Store.stack_get store b_register with
-      | _ when b_register < Store.stack_start -> b_register + 7
-      | Cell.ArgCount n -> n + b_register + 7
-      | _ -> failwith "unreachable allocate 1"
-  in
+    ({ store; e_register; cp_register; p_register; _ } as computer) : Machine.t
+    =
+  let new_e = new_stack_pointer computer in
   store
   |> Store.stack_put (Cell.Address e_register) new_e
   |> Store.stack_put (Cell.Address cp_register) (new_e + 1)
-  |> Store.stack_put (Cell.Address n) (new_e + 2)
+  |> Store.stack_put (Cell.ArgCount n) (new_e + 2)
   |> fun store ->
   {
     computer with
