@@ -275,7 +275,7 @@ let unwind_trail (a1 : int) (a2 : int) (store : Cell.t Store.t) : Cell.t Store.t
     Store.put cell trail_value acc
   in
   let open Batteries in
-  List.fold_left folder store (List.of_enum (a1 -- a2))
+  List.fold_left folder store (List.of_enum (a1 --^ a2))
 
 let retry_me_else (l : int)
     ({ b_register; p_register; store; tr_register; x_registers; _ } as computer)
@@ -298,7 +298,7 @@ let retry_me_else (l : int)
       add idx arg acc
     in
     let open Batteries in
-    List.fold_left folder x_registers (List.of_enum (0 -- n))
+    List.fold_left folder x_registers (List.of_enum (0 --^ n))
   in
   store
   |> Store.stack_put (Machine.Cell.Address l) (b_register + n + 4)
@@ -344,7 +344,7 @@ let trust_me
       add idx arg acc
     in
     let open Batteries in
-    List.fold_left folder x_registers (List.of_enum (0 -- n))
+    List.fold_left folder x_registers (List.of_enum (0 --^ n))
   in
   store
   |> unwind_trail
