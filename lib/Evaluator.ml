@@ -70,9 +70,31 @@ let rec deref (a : int) store : int =
 
 type address = int
 
-let bind (i1 : address) (i2 : address) (mem : Machine.Cell.t Store.t) :
-    Machine.Cell.t Store.t =
-  Store.heap_put (Reference i2) i1 mem
+let is_reference (cell : Machine.Cell.t) : bool =
+  match cell with Reference _ -> true | _ -> false
+
+let trail (a : address)
+    ({ hb_register; h_register; b_register; tr_register; store; _ } as computer :
+      Machine.t) : Machine.t =
+  if a < hb_register || (h_register < a && a < b_register) then
+    {
+      computer with
+      tr_register = tr_register + 1;
+      store = Store.trail_put (Cell.Address a) tr_register store;
+    }
+  else computer
+
+let bind (i1 : address) (i2 : address) ({ store; _ } as computer : Machine.t) :
+    Machine.t =
+  let current_a1 = Store.heap_get store i1 in
+  let current_a2 = Store.heap_get store i2 in
+  if is_reference current_a1 && ((not (is_reference current_a2)) || i2 < i1)
+  then
+    { computer with store = store |> Store.heap_put (Cell.Reference i2) i1 }
+    |> trail i1
+  else
+    { computer with store = store |> Store.heap_put (Cell.Reference i1) i2 }
+    |> trail i2
 
 let get_structure ((functor_label, functor_arity) : string * int)
     (register : Cell.register) ({ store; h_register; _ } as computer) :
@@ -84,18 +106,17 @@ let get_structure ((functor_label, functor_arity) : string * int)
       | Reference _ ->
           let structure = Structure (h_register + 1) in
           let func = Functor (functor_label, functor_arity) in
-          let heap =
-            store
-            |> Store.heap_put structure h_register
-            |> Store.heap_put func (h_register + 1)
+          let computer =
+            {
+              computer with
+              store =
+                store
+                |> Store.heap_put structure h_register
+                |> Store.heap_put func (h_register + 1);
+            }
             |> bind addr h_register
           in
-          {
-            computer with
-            h_register = h_register + 2;
-            mode = Write;
-            store = heap;
-          }
+          { computer with h_register = h_register + 2; mode = Write }
       | Structure a -> (
           match Store.heap_get store a with
           | Functor (label, arity)
@@ -129,9 +150,10 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
     store |> Store.pdl_push (Address a1) |> Store.pdl_push (Address a2)
     |> fun store -> { computer with store; fail = false }
   in
-  let aux ({ store; fail; _ } as computer) : Machine.t =
+  let aux ({ store; fail; tr_register; _ } as computer) : Machine.t =
     let mutStore = ref store in
     let mutFail = ref fail in
+    let mutTrRegister = ref tr_register in
     while not (Store.pdl_empty !mutStore || !mutFail) do
       let generic_p1 = Store.pdl_top !mutStore in
       let (Reference p1) = generic_p1 in
@@ -142,7 +164,17 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
       let d2 = deref p2 !mutStore in
       if d1 != d2 then
         match (Store.get !mutStore d1, Store.get !mutStore d2) with
-        | Reference _, _ | _, Reference _ -> mutStore := bind d1 d2 !mutStore
+        | Reference _, _ | _, Reference _ ->
+            let computer =
+              bind d1 d2
+                {
+                  computer with
+                  store = !mutStore;
+                  tr_register = !mutTrRegister;
+                }
+            in
+            mutStore := computer.store;
+            mutTrRegister := computer.tr_register
         | Structure v1, Structure v2 -> (
             match (Store.get !mutStore v1, Store.get !mutStore v2) with
             | Functor (s1, n1), Functor (s2, n2) ->

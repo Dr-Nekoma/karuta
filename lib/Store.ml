@@ -34,6 +34,7 @@ module type Memory = sig
 
   (* Trail Operations *)
   val trail_get : 'a t -> int -> 'a
+  val trail_put : 'a -> int -> 'a t -> 'a t
 
   (* PDL Operations *)
   val pdl_push : 'a -> 'a t -> 'a t
@@ -103,6 +104,9 @@ module Make (Layout : Layout) : Memory = struct
   (* TODO: trail size is variable! *)
   let trail_get (mem : 'a t) (index : int) : 'a =
     limited_get trail_start Layout.trail_pdl_size mem index
+
+  let trail_put (elem : 'a) (index : int) (mem : 'a t) : 'a t =
+    limited_put trail_start Layout.trail_pdl_size elem index mem
 
   (* TODO: Add top of trail as an argument to be checked*)
   let pdl_push (elem : 'a) (mem : 'a t) : 'a t =
