@@ -13,14 +13,14 @@ let set_register (register : Cell.register) (cell : Cell.t)
   | Cell.Y index_of_register -> (
       let stack_frame_size = Store.stack_get store (e_register + 2) in
       match stack_frame_size with
-      | Address size ->
+      | ArgCount size ->
           if index_of_register < size then
             let store =
               Store.stack_put cell (e_register + 3 + index_of_register) store
             in
             { computer with store }
           else failwith "stack overflow"
-      | _ -> failwith "invalid stack size (Not Address)")
+      | _ -> failwith "invalid stack size (Not ArgCount)")
 
 let get_register (register : Cell.register)
     { store; x_registers; e_register; _ } : Cell.t =
@@ -32,11 +32,11 @@ let get_register (register : Cell.register)
   | Cell.Y index_of_register -> (
       let stack_frame_size = Store.stack_get store (e_register + 2) in
       match stack_frame_size with
-      | Address size ->
+      | ArgCount size ->
           if index_of_register < size then
             Store.stack_get store (e_register + 3 + index_of_register)
           else failwith "stack overflow"
-      | _ -> failwith "invalid stack size (Not Address)")
+      | _ -> failwith "invalid stack size (Not ArgCount)")
 
 let put_structure (register : Cell.register) (functor_label, functor_arity)
     ({ store; h_register; _ } as computer) : Machine.t =
@@ -373,11 +373,11 @@ let trust_me
 let backtrack ({ store; b_register; _ } as computer) : Machine.t =
   let addr =
     match Store.stack_get store b_register with
-    | Cell.Address n -> b_register + n + 4
+    | Cell.ArgCount n -> b_register + n + 4
     | _ -> failwith "unreachable backtrack 0"
   in
   match Store.stack_get store addr with
-  | Cell.Address n -> { computer with p_register = n }
+  | Cell.Address n -> { computer with p_register = n; fail = false }
   | _ -> failwith "unreachable backtrack 1"
 
 let allocate (n : int)
@@ -410,78 +410,88 @@ let proceed ({ cp_register; _ } as computer) : Machine.t =
   { computer with p_register = cp_register }
 
 let eval_step (functor_table : Compiler.functor_map)
-    ({ store; p_register; _ } as computer : Machine.t) : Machine.t * bool =
+    ({ store; p_register; fail; _ } as computer : Machine.t) : Machine.t * bool
+    =
   let open Machine.Cell in
   (* print_endline @@ string_of_int p_register; *)
-  match Store.code_get store p_register with
-  | Instruction instruction -> (
-      print_endline @@ Machine.Cell.show_instruction instruction;
-      match instruction with
-      | GetStructure ((name, arity), register) ->
-          ( {
-              (get_structure (name, arity) register computer) with
-              p_register = p_register + 1;
-            },
-            false )
-      | PutStructure ((name, arity), register) ->
-          ( {
-              (put_structure register (name, arity) computer) with
-              p_register = p_register + 1;
-            },
-            false )
-      | PutVariable (x_register, a_register) ->
-          ( {
-              (put_variable x_register a_register computer) with
-              p_register = p_register + 1;
-            },
-            false )
-      | GetVariable (x_register, a_register) ->
-          ( {
-              (get_variable x_register a_register computer) with
-              p_register = p_register + 1;
-            },
-            false )
-      | SetVariable register ->
-          ( { (set_variable register computer) with p_register = p_register + 1 },
-            false )
-      | SetValue register ->
-          ( { (set_value register computer) with p_register = p_register + 1 },
-            false )
-      | UnifyVariable register ->
-          ( {
-              (unify_variable register computer) with
-              p_register = p_register + 1;
-            },
-            false )
-      | PutValue (x_register, a_register) ->
-          ( {
-              (put_value x_register a_register computer) with
-              p_register = p_register + 1;
-            },
-            false )
-      | GetValue (x_register, a_register) -> (
-          match
-            (get_register x_register computer, get_register a_register computer)
-          with
-          | Reference x_addr, Reference a_addr ->
-              ( {
-                  (get_value x_addr a_addr computer) with
-                  p_register = p_register + 1;
-                },
-                false )
-          | _ -> failwith "unreachable GetValue")
-      | UnifyValue register ->
-          ( { (unify_value register computer) with p_register = p_register + 1 },
-            false )
-      | Allocate n -> (allocate n computer, false)
-      | Deallocate -> (deallocate computer, false)
-      | Call predicate -> (call predicate functor_table computer, false)
-      | Proceed -> (proceed computer, false)
-      | Halt -> (computer, true)
-      | TryMeElse l -> (try_me_else l computer, false)
-      | RetryMeElse l -> (retry_me_else l computer, false)
-      | TrustMe -> (trust_me computer, false))
-  | _ -> failwith "unreachable eval_step"
+  if fail then (backtrack computer, false)
+  else
+    match Store.code_get store p_register with
+    | Instruction instruction -> (
+        print_endline @@ Machine.Cell.show_instruction instruction;
+        match instruction with
+        | GetStructure ((name, arity), register) ->
+            ( {
+                (get_structure (name, arity) register computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | PutStructure ((name, arity), register) ->
+            ( {
+                (put_structure register (name, arity) computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | PutVariable (x_register, a_register) ->
+            ( {
+                (put_variable x_register a_register computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | GetVariable (x_register, a_register) ->
+            ( {
+                (get_variable x_register a_register computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | SetVariable register ->
+            ( {
+                (set_variable register computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | SetValue register ->
+            ( { (set_value register computer) with p_register = p_register + 1 },
+              false )
+        | UnifyVariable register ->
+            ( {
+                (unify_variable register computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | PutValue (x_register, a_register) ->
+            ( {
+                (put_value x_register a_register computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | GetValue (x_register, a_register) -> (
+            match
+              ( get_register x_register computer,
+                get_register a_register computer )
+            with
+            | Reference x_addr, Reference a_addr ->
+                ( {
+                    (get_value x_addr a_addr computer) with
+                    p_register = p_register + 1;
+                  },
+                  false )
+            | _ -> failwith "unreachable GetValue")
+        | UnifyValue register ->
+            ( {
+                (unify_value register computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | Allocate n -> (allocate n computer, false)
+        | Deallocate -> (deallocate computer, false)
+        | Call predicate -> (call predicate functor_table computer, false)
+        | Proceed -> (proceed computer, false)
+        | Halt -> (computer, true)
+        | TryMeElse l -> (try_me_else l computer, false)
+        | RetryMeElse l -> (retry_me_else l computer, false)
+        | TrustMe -> (trust_me computer, false))
+    | _ -> failwith "unreachable eval_step"
 
 let rec eval (functor_table : Compiler.functor_map) (computer : Machine.t) :
     Machine.t =
