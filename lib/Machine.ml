@@ -46,7 +46,8 @@ module Store = Store.Make (struct
   let code_size = 100
   let heap_size = 100
   let stack_size = 100
-  let trail_pdl_size = 100
+  let pdl_size = 100
+  let trail_size = 100
 end)
 
 module IntMap = Map.Make (Int)

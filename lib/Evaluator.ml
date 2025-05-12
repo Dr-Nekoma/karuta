@@ -90,11 +90,9 @@ let bind (i1 : address) (i2 : address) ({ store; _ } as computer : Machine.t) :
   let current_a2 = Store.heap_get store i2 in
   if is_reference current_a1 && ((not (is_reference current_a2)) || i2 < i1)
   then
-    { computer with store = store |> Store.heap_put (Cell.Reference i2) i1 }
-    |> trail i1
+    { computer with store = store |> Store.heap_put current_a2 i1 } |> trail i1
   else
-    { computer with store = store |> Store.heap_put (Cell.Reference i1) i2 }
-    |> trail i2
+    { computer with store = store |> Store.heap_put current_a1 i2 } |> trail i2
 
 let get_structure ((functor_label, functor_arity) : string * int)
     (register : Cell.register) ({ store; h_register; _ } as computer) :
