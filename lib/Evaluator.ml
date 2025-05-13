@@ -15,10 +15,11 @@ let set_register (register : Cell.register) (cell : Cell.t)
       match stack_frame_size with
       | ArgCount size ->
           if index_of_register < size then
-            let store =
-              Store.stack_put cell (e_register + 3 + index_of_register) store
-            in
-            { computer with store }
+            {
+              computer with
+              store =
+                Store.stack_put cell (e_register + 3 + index_of_register) store;
+            }
           else failwith "stack overflow"
       | _ -> failwith "invalid stack size (Not ArgCount)")
 
@@ -41,12 +42,13 @@ let get_register (register : Cell.register)
 let put_structure (register : Cell.register) (functor_label, functor_arity)
     ({ store; h_register; _ } as computer) : Machine.t =
   let structure = Machine.Cell.Structure (h_register + 1) in
+  let reference = Reference h_register in
   let func = Functor (functor_label, functor_arity) in
   store
-  |> Store.heap_put structure h_register
   |> Store.heap_put func (h_register + 1)
+  |> Store.heap_put structure h_register
   |> (fun store -> { computer with store; h_register = h_register + 2 })
-  |> set_register register structure
+  |> set_register register reference
 
 let set_variable (register : Cell.register)
     ({ store; h_register; _ } as computer) =
@@ -122,7 +124,9 @@ let get_structure ((functor_label, functor_arity) : string * int)
               { computer with s_register = a + 1; mode = Read }
           | _ -> { computer with fail = true })
       | _ -> { computer with fail = true })
-  | _ -> failwith "unreachable get_structure"
+  | x ->
+      print_endline @@ Cell.show x;
+      failwith "unreachable get_structure"
 
 let unify_variable (register : Cell.register)
     ({ store; h_register; s_register; mode; _ } as computer) : Machine.t =
@@ -154,6 +158,7 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
     let mutTrRegister = ref tr_register in
     while not (Store.pdl_empty !mutStore || !mutFail) do
       let generic_p1 = Store.pdl_top !mutStore in
+      print_endline @@ Cell.show generic_p1;
       let (Reference p1) = generic_p1 in
       mutStore := Store.pdl_pop !mutStore;
       let (Reference p2) = Store.pdl_top !mutStore in
