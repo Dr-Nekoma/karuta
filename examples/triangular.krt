@@ -10,4 +10,4 @@ triangle[succ[Prev], Acc, Out] :-
 
 triangle[nil, Out, Out].
 
-triangle[succ[succ[succ[succ[nil]]]], Out]?
+triangle[succ[nil], Out]?

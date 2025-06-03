@@ -17,6 +17,15 @@ let update_store (computer : Lib.Machine.t)
     (store : Lib.Machine.Cell.t Lib.Machine.Store.t) : Lib.Machine.t =
   { computer with store }
 
+let show_functor_table (functors : Lib.Compiler.functor_map) : string =
+  let open Lib.Compiler.FunctorMap in
+  BatSeq.fold_left
+    (fun acc ((label, arity), address) ->
+      acc ^ "\n" ^ label ^ "/" ^ string_of_int arity ^ ":"
+      ^ string_of_int address)
+    "" (to_seq functors)
+[@@warning "-32"]
+
 let _ =
   let open Option in
   let+ content =
@@ -36,6 +45,7 @@ let _ =
             initialComputer.store )
         |> bimap Fun.id (update_store initialComputer)
       in
+      print_endline @@ show_functor_table compiler.functor_table;
       print_endline @@ Lib.Machine.show_store computer.store (Some 30);
       match compiler.entry_point with
       | None -> None

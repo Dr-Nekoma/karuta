@@ -64,13 +64,13 @@ let set_value (register : Cell.register) ({ store; h_register; _ } as computer)
   store |> Store.heap_put value_of_register h_register |> fun store ->
   { computer with store; h_register = h_register + 1 }
 
-let rec deref (a : int) store : int =
-  let cell = Store.heap_get store a in
+type address = int
+
+let rec deref (a : address) store : address =
+  let cell = Store.get store a in
   match cell with
   | Reference value when value <> a -> deref value store
   | _ -> a
-
-type address = int
 
 let is_reference (cell : Machine.Cell.t) : bool =
   match cell with Reference _ -> true | _ -> false
@@ -88,13 +88,11 @@ let trail (a : address)
 
 let bind (i1 : address) (i2 : address) ({ store; _ } as computer : Machine.t) :
     Machine.t =
-  let current_a1 = Store.heap_get store i1 in
-  let current_a2 = Store.heap_get store i2 in
+  let current_a1 = Store.get store i1 in
+  let current_a2 = Store.get store i2 in
   if is_reference current_a1 && ((not (is_reference current_a2)) || i2 < i1)
-  then
-    { computer with store = store |> Store.heap_put current_a2 i1 } |> trail i1
-  else
-    { computer with store = store |> Store.heap_put current_a1 i2 } |> trail i2
+  then { computer with store = store |> Store.put current_a2 i1 } |> trail i1
+  else { computer with store = store |> Store.put current_a1 i2 } |> trail i2
 
 let get_structure ((functor_label, functor_arity) : string * int)
     (register : Cell.register) ({ store; h_register; _ } as computer) :
@@ -102,7 +100,7 @@ let get_structure ((functor_label, functor_arity) : string * int)
   match get_register register computer with
   | Reference address -> (
       let addr = deref address store in
-      match Store.heap_get store addr with
+      match Store.get store addr with
       | Reference _ ->
           let structure = Structure (h_register + 1) in
           let func = Functor (functor_label, functor_arity) in
@@ -118,6 +116,9 @@ let get_structure ((functor_label, functor_arity) : string * int)
           in
           { computer with h_register = h_register + 2; mode = Write }
       | Structure a -> (
+          print_endline @@ "get_structure: Structure " ^ string_of_int a;
+          print_endline functor_label;
+          print_endline @@ string_of_int functor_arity;
           match Store.heap_get store a with
           | Functor (label, arity)
             when label = functor_label && arity = functor_arity ->
@@ -153,15 +154,15 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
     |> fun store -> { computer with store; fail = false }
   in
   let aux ({ store; fail; tr_register; _ } as computer) : Machine.t =
+    (* FIXME: figure out why Prev in triangle.krt is not unifying *)
     let mutStore = ref store in
     let mutFail = ref fail in
     let mutTrRegister = ref tr_register in
     while not (Store.pdl_empty !mutStore || !mutFail) do
       let generic_p1 = Store.pdl_top !mutStore in
-      print_endline @@ Cell.show generic_p1;
-      let (Reference p1) = generic_p1 in
+      let (Address p1) = generic_p1 in
       mutStore := Store.pdl_pop !mutStore;
-      let (Reference p2) = Store.pdl_top !mutStore in
+      let (Address p2) = Store.pdl_top !mutStore in
       mutStore := Store.pdl_pop !mutStore;
       let d1 = deref p1 !mutStore in
       let d2 = deref p2 !mutStore in
@@ -188,9 +189,15 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
                   done
                 else mutFail := true
             | _, _ -> failwith "Unreachable")
+        | _, _ -> mutFail := true
       else ()
     done;
-    { computer with store = !mutStore; fail = !mutFail }
+    {
+      computer with
+      store = !mutStore;
+      fail = !mutFail;
+      tr_register = !mutTrRegister;
+    }
   in
   aux newComputer
 
@@ -199,7 +206,7 @@ let unify_value (register : Cell.register)
   match mode with
   | Read -> (
       match get_register register computer with
-      | Address addr ->
+      | Reference addr ->
           { (unify addr s_register computer) with s_register = s_register + 1 }
       | _ -> failwith "unreachable unify_value")
   | Write ->

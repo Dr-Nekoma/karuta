@@ -106,11 +106,15 @@ module Fact : Fact = struct
         |> emit_queue_arguments
 
   and emit_argument
-      ((({ variables; _ } as generator), ({ registers; _ } as allocator), store) :
+      (( ({ variables; scope_registers; _ } as generator),
+         ({ registers; _ } as allocator),
+         store ) :
         t * RegisterAllocator.t * Cell.t Store.t) (index : int)
       (elem : Ast.expr) : t * RegisterAllocator.t * Cell.t Store.t =
     let open RegisterAllocator.RegisterMap in
-    let register = cell_register @@ find elem registers in
+    let raw_register = find elem registers in
+    let register = cell_register raw_register in
+    let scope_registers = S.add raw_register scope_registers in
     let arg_register = Cell.X index in
     match elem with
     | Variable { namev } ->
@@ -120,12 +124,14 @@ module Fact : Fact = struct
               (S.add namev variables, Cell.GetVariable (register, arg_register))
           | Some _ -> (variables, Cell.GetValue (register, arg_register))
         in
-        ({ generator with variables }, store)
+        ({ generator with variables; scope_registers }, store)
         |> add_instruction instruction
         |> put_allocator allocator
     | Functor { namef; arity; elements } ->
         let instruction = Cell.GetStructure ((namef, arity), arg_register) in
-        let generator, store = add_instruction instruction (generator, store) in
+        let generator, store =
+          add_instruction instruction ({ generator with scope_registers }, store)
+        in
         List.fold_left emit_nested_argument
           (generator, allocator, store)
           elements
@@ -184,9 +190,14 @@ module Argument : Argument = struct
     let register = cell_register @@ find elem registers in
     match elem with
     | Functor { namef; elements; arity } ->
+        let generator, allocator, store =
+          List.fold_left emit_query (generator, allocator, store) elements
+        in
         let instruction = Cell.PutStructure ((namef, arity), register) in
         let generator, store = add_instruction instruction (generator, store) in
-        List.fold_left emit_query (generator, allocator, store) elements
+        List.fold_left emit_toplevel_query_argument
+          (generator, allocator, store)
+          elements
     | _ -> emit_toplevel_query_argument (generator, allocator, store) elem
 
   let emit_functor =
@@ -199,26 +210,11 @@ end
 let rec allocate_head ({ elements; _ } : Ast.func)
     ((generator, ({ y_register; _ } as allocator), store) :
       t * RegisterAllocator.t * Cell.t Store.t) =
-  let head_folder
-      (( ( ({ scope_registers; _ } as generator),
-           ({ registers; _ } as allocator),
-           store ),
-         counter ) :
-        (t * RegisterAllocator.t * Cell.t Store.t) * int) element :
-      (t * RegisterAllocator.t * Cell.t Store.t) * int =
-    let open RegisterAllocator.RegisterMap in
-    let raw_register = find element registers in
-    let register = cell_register raw_register in
-    let scope_registers = S.add raw_register scope_registers in
-    let instruction = Cell.GetVariable (register, Cell.X counter) in
-    let generator, store =
-      add_instruction instruction ({ generator with scope_registers }, store)
-    in
-    ((generator, allocator, store), counter + 1)
-  in
   let instruction = Cell.Allocate y_register in
   let generator, store = add_instruction instruction (generator, store) in
-  List.fold_left head_folder ((generator, allocator, store), 0) elements |> fst
+  Seq.fold_lefti Fact.emit_argument
+    (generator, allocator, store)
+    (List.to_seq elements)
 
 and allocate_body (elements : Ast.func list) (generator, allocator, store) :
     t * RegisterAllocator.t * Cell.t Store.t =

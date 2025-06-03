@@ -85,10 +85,10 @@ module Make (Layout : Layout) : Memory = struct
     limited_put 0 Layout.code_size elem index mem
 
   let heap_start = Layout.code_size
-  let pdl_tracker = ref (mem_size - 1)
   let stack_start = heap_start + Layout.heap_size
   let pdl_start = stack_start + Layout.stack_size
   let trail_start = pdl_start + Layout.pdl_size
+  let pdl_tracker = ref pdl_start
 
   let heap_get (mem : 'a t) (index : int) : 'a =
     limited_get heap_start Layout.heap_size mem index
@@ -109,17 +109,18 @@ module Make (Layout : Layout) : Memory = struct
     limited_put trail_start Layout.trail_size elem index mem
 
   let pdl_push (elem : 'a) (mem : 'a t) : 'a t =
-    if !pdl_tracker < pdl_start then failwith "Stack is full!"
-    else pdl_tracker := !pdl_tracker - 1;
-    put elem (!pdl_tracker + 1) mem
+    if trail_start <= !pdl_tracker then failwith "Stack is full!"
+    else pdl_tracker := !pdl_tracker + 1;
+    put elem (!pdl_tracker - 1) mem
 
-  let pdl_empty (_ : 'a t) : bool = !pdl_tracker = mem_size - 1
+  let pdl_empty (_ : 'a t) : bool = !pdl_tracker = pdl_start
 
   let pdl_pop (mem : 'a t) : 'a t =
     if pdl_empty mem then failwith "Stack is empty!"
-    else pdl_tracker := !pdl_tracker + 1;
+    else pdl_tracker := !pdl_tracker - 1;
     mem
 
   let pdl_top (mem : 'a t) : 'a =
-    if pdl_empty mem then failwith "Stack is empty!" else get mem !pdl_tracker
+    if pdl_empty mem then failwith "Stack is empty!"
+    else get mem (!pdl_tracker - 1)
 end
