@@ -66,12 +66,21 @@ module Fact : Fact = struct
       t * RegisterAllocator.t * Cell.t Store.t =
     let open RegisterAllocator.RegisterMap in
     let register = cell_register @@ find elem registers in
-    let instruction = Cell.UnifyVariable register in
-    let generator, store = add_instruction instruction (generator, store) in
     match elem with
     | Variable { namev } ->
-        ({ generator with variables = S.add namev variables }, allocator, store)
+        let variables, instruction =
+          match S.find_opt namev variables with
+          | None -> (S.add namev variables, Cell.UnifyVariable register)
+          | Some _ -> (variables, Cell.UnifyValue register)
+        in
+        let generator, store =
+          add_instruction instruction ({ generator with variables }, store)
+        in
+        (generator, allocator, store)
     | Functor _ as f ->
+        let generator, store =
+          add_instruction (Cell.UnifyValue register) (generator, store)
+        in
         ({ generator with terms = FT.cons terms f }, allocator, store)
 
   and emit_queue_nested_argument
@@ -143,14 +152,14 @@ module type Argument = sig
     Ast.expr ->
     t * RegisterAllocator.t * Cell.t Store.t
 
-  val emit_functor :
+  val emit_functor_argument :
     t * RegisterAllocator.t * Cell.t Store.t ->
     Ast.expr ->
     t * RegisterAllocator.t * Cell.t Store.t
 end
 
 module Argument : Argument = struct
-  let rec emit_argument
+  let emit_argument
       ((variable, value, catchall) :
         (Cell.register -> Cell.instruction)
         * (Cell.register -> Cell.instruction)
@@ -176,16 +185,17 @@ module Argument : Argument = struct
         |> add_instruction instruction
         |> put_allocator allocator
 
-  and emit_query
+  let emit_functor_argument =
+    emit_argument
+      ( (fun v -> Cell.SetVariable v),
+        (fun v -> Cell.SetValue v),
+        fun v -> Cell.SetValue v )
+
+  let rec emit_query
       ((generator, ({ registers; _ } as allocator), store) :
         t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.expr) :
       t * RegisterAllocator.t * Cell.t Store.t =
-    let emit_toplevel_query_argument =
-      emit_argument
-        ( (fun v -> Cell.SetVariable v),
-          (fun v -> Cell.SetValue v),
-          fun v -> Cell.SetValue v )
-    in
+    let emit_toplevel_query_argument = emit_functor_argument in
     let open RegisterAllocator.RegisterMap in
     let register = cell_register @@ find elem registers in
     match elem with
@@ -195,16 +205,10 @@ module Argument : Argument = struct
         in
         let instruction = Cell.PutStructure ((namef, arity), register) in
         let generator, store = add_instruction instruction (generator, store) in
-        List.fold_left emit_toplevel_query_argument
+        List.fold_left emit_functor_argument
           (generator, allocator, store)
           elements
     | _ -> emit_toplevel_query_argument (generator, allocator, store) elem
-
-  let emit_functor =
-    emit_argument
-      ( (fun v -> Cell.UnifyVariable v),
-        (fun v -> Cell.UnifyValue v),
-        fun v -> Cell.UnifyVariable v )
 end
 
 let rec allocate_head ({ elements; _ } : Ast.func)
@@ -280,7 +284,7 @@ and generate_functor (generator, ({ registers; _ } as allocator), store)
   let register = cell_register @@ find (Ast.Functor func) registers in
   let instruction = Cell.PutStructure ((namef, arity), register) in
   let generator, store = add_instruction instruction (generator, store) in
-  List.fold_left Argument.emit_functor (generator, allocator, store) elements
+  List.fold_left Argument.emit_functor_argument (generator, allocator, store) elements
 
 and swap_allocators (allocators : RegisterAllocator.t list)
     ((generator, _, store) : t * RegisterAllocator.t * Cell.t Store.t) :
