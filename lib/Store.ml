@@ -39,8 +39,7 @@ module type Memory = sig
 
   (* PDL Operations *)
   val pdl_push : 'a -> 'a t -> 'a t
-  val pdl_pop : 'a t -> 'a t
-  val pdl_top : 'a t -> 'a
+  val pdl_pop : 'a t -> 'a * 'a t
   val pdl_empty : 'a t -> bool
 end
 
@@ -113,14 +112,15 @@ module Make (Layout : Layout) : Memory = struct
     else pdl_tracker := !pdl_tracker + 1;
     put elem (!pdl_tracker - 1) mem
 
-  let pdl_empty (_ : 'a t) : bool = !pdl_tracker = pdl_start
+  let pdl_empty (_ : 'a t) : bool =
+    print_endline @@ "pdl_empty: " ^ string_of_int !pdl_tracker ^ " "
+    ^ string_of_int pdl_start;
+    !pdl_tracker = pdl_start
 
-  let pdl_pop (mem : 'a t) : 'a t =
+  let pdl_pop (mem : 'a t) : 'a * 'a t =
     if pdl_empty mem then failwith "Stack is empty!"
-    else pdl_tracker := !pdl_tracker - 1;
-    mem
-
-  let pdl_top (mem : 'a t) : 'a =
-    if pdl_empty mem then failwith "Stack is empty!"
-    else get mem (!pdl_tracker - 1)
+    else
+      let element = get mem (!pdl_tracker - 1) in
+      pdl_tracker := !pdl_tracker - 1;
+      (element, mem)
 end

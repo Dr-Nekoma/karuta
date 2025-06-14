@@ -86,13 +86,13 @@ let trail (a : address)
     }
   else computer
 
-let bind (i1 : address) (i2 : address) ({ store; _ } as computer : Machine.t) :
+let bind (a1 : address) (a2 : address) ({ store; _ } as computer : Machine.t) :
     Machine.t =
-  let current_a1 = Store.get store i1 in
-  let current_a2 = Store.get store i2 in
-  if is_reference current_a1 && ((not (is_reference current_a2)) || i2 < i1)
-  then { computer with store = store |> Store.put current_a2 i1 } |> trail i1
-  else { computer with store = store |> Store.put current_a1 i2 } |> trail i2
+  let t1 = Store.get store a1 in
+  let t2 = Store.get store a2 in
+  if is_reference t1 && ((not (is_reference t2)) || a2 < a1) then
+    { computer with store = store |> Store.put t2 a1 } |> trail a1
+  else { computer with store = store |> Store.put t1 a2 } |> trail a2
 
 let get_structure ((functor_label, functor_arity) : string * int)
     (register : Cell.register) ({ store; h_register; _ } as computer) :
@@ -102,6 +102,9 @@ let get_structure ((functor_label, functor_arity) : string * int)
       let addr = deref address store in
       match Store.get store addr with
       | Reference _ ->
+          print_endline @@ "free variable!";
+          print_endline @@ Machine.show_store computer.store None;
+          let _ = read_line () in
           let structure = Structure (h_register + 1) in
           let func = Functor (functor_label, functor_arity) in
           let computer =
@@ -134,9 +137,11 @@ let unify_variable (register : Cell.register)
   match mode with
   | Read ->
       let value = Store.heap_get store s_register in
+      print_endline @@ "read: " ^ show value;
       set_register register value { computer with s_register = s_register + 1 }
   | Write ->
       let reference = Reference h_register in
+      print_endline @@ "write: " ^ show reference;
       store
       |> Store.heap_put reference h_register
       |> (fun store ->
@@ -149,57 +154,49 @@ let unify_variable (register : Cell.register)
       |> set_register register reference
 
 let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
-  let newComputer =
+  print_endline @@ "unify: " ^ string_of_int a1 ^ " " ^ string_of_int a2;
+  let preparedComputer =
     store |> Store.pdl_push (Address a1) |> Store.pdl_push (Address a2)
     |> fun store -> { computer with store; fail = false }
   in
-  let aux ({ store; fail; tr_register; _ } as computer) : Machine.t =
-    (* FIXME: figure out why Prev in triangle.krt is not unifying *)
-    let mutStore = ref store in
-    let mutFail = ref fail in
-    let mutTrRegister = ref tr_register in
-    while not (Store.pdl_empty !mutStore || !mutFail) do
-      let generic_p1 = Store.pdl_top !mutStore in
-      let (Address p1) = generic_p1 in
-      mutStore := Store.pdl_pop !mutStore;
-      let (Address p2) = Store.pdl_top !mutStore in
-      mutStore := Store.pdl_pop !mutStore;
-      let d1 = deref p1 !mutStore in
-      let d2 = deref p2 !mutStore in
+  let rec loop ({ store; fail; _ } as computer) : Machine.t =
+    (* FIXME: figure out why Prev in recursive call in triangle.krt is not unifying *)
+    if Store.pdl_empty store || fail then computer
+    else
+      let Address p1, store = Store.pdl_pop store in
+      let Address p2, store = Store.pdl_pop store in
+      let d1 = deref p1 store in
+      let d2 = deref p2 store in
+      print_endline @@ "unify loop: " ^ string_of_int d1 ^ " "
+      ^ string_of_int d2;
       if d1 != d2 then
-        match (Store.get !mutStore d1, Store.get !mutStore d2) with
+        match (Store.get store d1, Store.get store d2) with
         | Reference _, _ | _, Reference _ ->
-            let computer =
-              bind d1 d2
-                {
-                  computer with
-                  store = !mutStore;
-                  tr_register = !mutTrRegister;
-                }
-            in
-            mutStore := computer.store;
-            mutTrRegister := computer.tr_register
+            loop @@ bind d1 d2 { computer with store }
         | Structure v1, Structure v2 -> (
-            match (Store.get !mutStore v1, Store.get !mutStore v2) with
+            match (Store.get store v1, Store.get store v2) with
             | Functor (s1, n1), Functor (s2, n2) ->
+                let open Batteries in
                 if s1 = s2 && n1 = n2 then
-                  for i = 1 to n1 do
-                    mutStore := Store.pdl_push (Address (v1 + i)) !mutStore;
-                    mutStore := Store.pdl_push (Address (v2 + i)) !mutStore
-                  done
-                else mutFail := true
+                  loop
+                    {
+                      computer with
+                      store =
+                        List.fold_left
+                          (fun store i ->
+                            print_endline @@ "in fold: " ^ string_of_int i;
+                            store
+                            |> Store.pdl_push (Address (v1 + i))
+                            |> Store.pdl_push (Address (v2 + i)))
+                          store
+                          (List.of_enum (1 -- n1));
+                    }
+                else { computer with fail = true }
             | _, _ -> failwith "Unreachable")
-        | _, _ -> mutFail := true
-      else ()
-    done;
-    {
-      computer with
-      store = !mutStore;
-      fail = !mutFail;
-      tr_register = !mutTrRegister;
-    }
+        | _, _ -> { computer with fail = true }
+      else loop computer
   in
-  aux newComputer
+  loop preparedComputer
 
 let unify_value (register : Cell.register)
     ({ store; h_register; s_register; mode; _ } as computer) : Machine.t =
@@ -520,11 +517,16 @@ let eval_step (functor_table : Compiler.functor_map)
                   false )
             | _ -> failwith "unreachable GetValue")
         | UnifyValue register ->
-            ( {
+            let ret =
+              {
                 (unify_value register computer) with
                 p_register = p_register + 1;
-              },
-              false )
+              }
+            in
+            print_endline @@ "free variable!";
+            print_endline @@ Machine.show_store ret.store (Some 150);
+            let _ = read_line () in
+            (ret, false)
         | Allocate n -> (allocate n computer, false)
         | Deallocate -> (deallocate computer, false)
         | Call predicate -> (call predicate functor_table computer, false)
