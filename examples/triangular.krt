@@ -1,6 +1,7 @@
-plus[nil, Out, Out].
 plus[Out, nil, Out].
+
 plus[succ[Prev], X, Out] :- plus[Prev, succ[X], Out].
+plus[nil, Out, Out].
 
 triangle[N, Out] :- triangle[N, nil, Out].
 
