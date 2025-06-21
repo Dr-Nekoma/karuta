@@ -456,7 +456,8 @@ let eval_step (functor_table : Compiler.functor_map)
   else
     match Store.code_get store p_register with
     | Instruction instruction -> (
-        print_endline @@ Machine.Cell.show_instruction instruction;
+        if computer.trace then
+          print_endline @@ Machine.Cell.show_instruction instruction;
         match instruction with
         | GetStructure ((name, arity), register) ->
             ( {
@@ -572,6 +573,10 @@ and debugger (functor_table : Compiler.functor_map) (computer : Machine.t) :
         print_string @@ Compiler.show_functor_table functor_table;
         debugger functor_table computer
     | "q" -> debugger functor_table { computer with debug = false }
+    | "t" ->
+        print_string "Trace ";
+        print_endline @@ if computer.trace then "off" else "on";
+        debugger functor_table { computer with trace = not computer.trace }
     | "h" -> computer
     | "" ->
         let computer, stop = eval_step functor_table computer in

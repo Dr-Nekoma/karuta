@@ -69,6 +69,7 @@ type t = {
   mode : Mode.t;
   fail : bool;
   debug : bool;
+  trace : bool;
 }
 
 let show_store (store : Cell.t Store.t) (start_index : int) (end_index : int) :
@@ -111,4 +112,5 @@ let initialize () : t =
     mode = Mode.Read;
     fail = false;
     debug = false;
+    trace = false;
   }
