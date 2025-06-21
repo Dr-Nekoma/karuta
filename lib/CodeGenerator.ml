@@ -42,11 +42,12 @@ let cell_register : RegisterAllocator.register -> Cell.register = function
 and add_instruction (instruction : Cell.instruction)
     ((({ p_register; _ } as generator), store) : t * Cell.t Store.t) :
     t * Cell.t Store.t =
-  let real_instruction = match instruction with
-     | Cell.Call ("debug", 0) -> Cell.Debug
-     | inst -> inst
+  let real_instruction =
+    match instruction with Cell.Call ("debug", 0) -> Cell.Debug | inst -> inst
   in
-  let store = Store.code_put (Cell.Instruction real_instruction) p_register store in
+  let store =
+    Store.code_put (Cell.Instruction real_instruction) p_register store
+  in
   ({ generator with p_register = p_register + 1 }, store)
 
 module type Fact = sig
@@ -288,7 +289,9 @@ and generate_functor (generator, ({ registers; _ } as allocator), store)
   let register = cell_register @@ find (Ast.Functor func) registers in
   let instruction = Cell.PutStructure ((namef, arity), register) in
   let generator, store = add_instruction instruction (generator, store) in
-  List.fold_left Argument.emit_functor_argument (generator, allocator, store) elements
+  List.fold_left Argument.emit_functor_argument
+    (generator, allocator, store)
+    elements
 
 and swap_allocators (allocators : RegisterAllocator.t list)
     ((generator, _, store) : t * RegisterAllocator.t * Cell.t Store.t) :

@@ -8,6 +8,7 @@ end
 
 module type Memory = sig
   type 'a t
+
   module Layout : Layout
 
   (* Store Operations *)
