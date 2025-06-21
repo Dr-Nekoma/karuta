@@ -523,7 +523,7 @@ let eval_step (functor_table : Compiler.functor_map)
               }
             in
             print_endline @@ "free variable!";
-            print_endline @@ Machine.show_store ret.store None (Some 150);
+            print_endline @@ Machine.show_store ret.store 0 150;
             let _ = read_line () in
             (ret, false)
         | Allocate n -> (allocate n computer, false)
@@ -555,7 +555,17 @@ and debugger (functor_table : Compiler.functor_map) (computer : Machine.t) :
         print_endline @@ Machine.show_x_registers computer.x_registers;
         debugger functor_table computer
     | "m" ->
-        print_endline @@ Machine.show_store computer.store (Some 100) (Some 200);
+        print_endline
+        @@ Machine.show_store computer.store Store.heap_start
+             (Store.heap_start + Store.Layout.heap_size);
+        debugger functor_table computer
+    | "s" ->
+        print_endline
+        @@ Machine.show_store computer.store Store.stack_start
+             (Store.stack_start + Store.Layout.stack_size);
+        debugger functor_table computer
+    | "f" ->
+        print_string @@ Compiler.show_functor_table functor_table;
         debugger functor_table computer
     | "q" -> debugger functor_table { computer with debug = false }
     | "h" -> computer

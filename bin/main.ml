@@ -2,29 +2,11 @@ module Option = struct
   let ( let+ ) = Option.bind
 end
 
-let show_registers (registers : int Lib.RegisterAllocator.RegisterMap.t) :
-    string =
-  let open Lib.RegisterAllocator.RegisterMap in
-  BatSeq.fold_left
-    (fun acc (term, register) ->
-      acc ^ "\n" ^ Lib.Ast.show_expr term ^ " = " ^ string_of_int register)
-    "" (to_seq registers)
-[@@warning "-32"]
-
 let bimap f g (a1, a2) = (f a1, g a2)
 
 let update_store (computer : Lib.Machine.t)
     (store : Lib.Machine.Cell.t Lib.Machine.Store.t) : Lib.Machine.t =
   { computer with store }
-
-let show_functor_table (functors : Lib.Compiler.functor_map) : string =
-  let open Lib.Compiler.FunctorMap in
-  BatSeq.fold_left
-    (fun acc ((label, arity), address) ->
-      acc ^ "\n" ^ label ^ "/" ^ string_of_int arity ^ ":"
-      ^ string_of_int address)
-    "" (to_seq functors)
-[@@warning "-32"]
 
 let _ =
   let open Option in
@@ -45,8 +27,6 @@ let _ =
             initialComputer.store )
         |> bimap Fun.id (update_store initialComputer)
       in
-      print_endline @@ show_functor_table compiler.functor_table;
-      print_endline @@ Lib.Machine.show_store computer.store (Some 100) (Some 200);
       match compiler.entry_point with
       | None -> None
       | Some entry_point ->

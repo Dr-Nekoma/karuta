@@ -8,6 +8,7 @@ end
 
 module type Memory = sig
   type 'a t
+  module Layout : Layout
 
   (* Store Operations *)
   val window : int -> int -> 'a t -> 'a t option
@@ -47,6 +48,7 @@ end
 
 module Make (Layout : Layout) : Memory = struct
   module FT = BatFingerTree
+  module Layout = Layout
 
   type 'a t = 'a FT.t
 

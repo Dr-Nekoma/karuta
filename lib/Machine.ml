@@ -71,17 +71,17 @@ type t = {
   debug : bool;
 }
 
-let show_store (store : Cell.t Store.t) (start : int option)
-    (how_many : int option) : string =
-  let actual_start = match start with None -> 0 | Some n -> n in
-  let actual_end = match how_many with None -> 0 | Some n -> n in
-  match Option.map fst @@
-  Option.map
-    (Store.fold_left
-         (fun (s, n) elem ->
-           (s ^ string_of_int n ^ ": " ^ " " ^ Cell.show elem ^ "\n", n + 1))
-         ("", actual_start))
-  @@ Store.window actual_start actual_end store with
+let show_store (store : Cell.t Store.t) (start_index : int) (end_index : int) :
+    string =
+  match
+    Option.map fst
+    @@ Option.map
+         (Store.fold_left
+            (fun (s, n) elem ->
+              (s ^ string_of_int n ^ ": " ^ " " ^ Cell.show elem ^ "\n", n + 1))
+            ("", start_index))
+    @@ Store.window start_index end_index store
+  with
   | None -> "Invalid bounds"
   | Some s -> s
 
