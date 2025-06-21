@@ -1,12 +1,14 @@
 plus[Out, nil, Out].
 
-plus[succ[Prev], X, Out] :- plus[Prev, succ[X], Out].
+plus[succ[Prev], X, Out] :- debug[], plus[Prev, succ[X], Out].
 plus[nil, Out, Out].
 
 triangle[N, Out] :- triangle[N, nil, Out].
 
 triangle[succ[Prev], Acc, Out] :-
+  debug[],
   plus[succ[Prev], Acc, NewAcc],
+  debug[],
   triangle[Prev, NewAcc, Out].
 
 triangle[nil, Out, Out].
