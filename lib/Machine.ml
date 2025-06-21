@@ -78,7 +78,9 @@ let show_store (store : Cell.t Store.t) (start_index : int) (end_index : int) :
     @@ Option.map
          (Store.fold_left
             (fun (s, n) elem ->
-              (s ^ string_of_int n ^ ": " ^ " " ^ Cell.show elem ^ "\n", n + 1))
+              ( (if elem = Cell.Empty then s
+                 else s ^ string_of_int n ^ ": " ^ " " ^ Cell.show elem ^ "\n"),
+                n + 1 ))
             ("", start_index))
     @@ Store.window start_index end_index store
   with
