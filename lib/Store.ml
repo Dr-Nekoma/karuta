@@ -10,6 +10,8 @@ module type Memory = sig
   type 'a t
 
   (* Store Operations *)
+  val window : int -> int -> 'a t -> 'a t option
+  val fold_left : ('acc -> 'a -> 'acc) -> 'acc -> 'a t -> 'acc
   val to_list : 'a t -> 'a list
   val empty : 'a t
   val initialize : 'a t -> int -> 'a -> 'a t
@@ -48,6 +50,16 @@ module Make (Layout : Layout) : Memory = struct
 
   type 'a t = 'a FT.t
 
+  let window (start : int) (end_ : int) (mem : 'a t) : 'a t option =
+    (* TODO: Actually do exception handling, don't duplicate the bounds check *)
+    if start < 0 || FT.size mem = 0 then None
+    else if end_ < start || FT.size mem < end_ then None
+    else
+      let _, tail = FT.split_at mem start in
+      let middle, _ = FT.split_at tail (end_ - start) in
+      Some middle
+
+  let fold_left = FT.fold_left
   let to_list = FT.to_list
   let get = FT.get
   let set = FT.set

@@ -42,7 +42,11 @@ let cell_register : RegisterAllocator.register -> Cell.register = function
 and add_instruction (instruction : Cell.instruction)
     ((({ p_register; _ } as generator), store) : t * Cell.t Store.t) :
     t * Cell.t Store.t =
-  let store = Store.code_put (Cell.Instruction instruction) p_register store in
+  let real_instruction = match instruction with
+     | Cell.Call ("debug", 0) -> Cell.Debug
+     | inst -> inst
+  in
+  let store = Store.code_put (Cell.Instruction real_instruction) p_register store in
   ({ generator with p_register = p_register + 1 }, store)
 
 module type Fact = sig

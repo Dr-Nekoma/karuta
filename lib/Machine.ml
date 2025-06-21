@@ -20,6 +20,7 @@ module Cell = struct
     | RetryMeElse of int
     | TrustMe
     | Halt
+    | Debug
   [@@deriving show]
 
   and t =
@@ -67,20 +68,22 @@ type t = {
   tr_register : int;
   mode : Mode.t;
   fail : bool;
+  debug : bool;
 }
 
-let show_store (store : Cell.t Store.t) (how_many : int option) : string =
-  let limit_list (l : 'a list) : 'a list =
-    match how_many with
-    | None -> l
-    | Some x -> List.to_seq l |> Seq.take x |> List.of_seq
-  in
-  fst
-  @@ List.fold_left
-       (fun (s, n) elem ->
-         (s ^ string_of_int n ^ ": " ^ " " ^ Cell.show elem ^ "\n", n + 1))
-       ("", 0)
-       (limit_list @@ Store.to_list store)
+let show_store (store : Cell.t Store.t) (start : int option)
+    (how_many : int option) : string =
+  let actual_start = match start with None -> 0 | Some n -> n in
+  let actual_end = match how_many with None -> 0 | Some n -> n in
+  match Option.map fst @@
+  Option.map
+    (Store.fold_left
+         (fun (s, n) elem ->
+           (s ^ string_of_int n ^ ": " ^ " " ^ Cell.show elem ^ "\n", n + 1))
+         ("", actual_start))
+  @@ Store.window actual_start actual_end store with
+  | None -> "Invalid bounds"
+  | Some s -> s
 
 let show_x_registers (registers : Cell.t IntMap.t) : string =
   let open IntMap in
@@ -105,4 +108,5 @@ let initialize () : t =
     tr_register = Store.trail_start;
     mode = Mode.Read;
     fail = false;
+    debug = false;
   }

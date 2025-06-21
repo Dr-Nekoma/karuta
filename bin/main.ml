@@ -46,7 +46,7 @@ let _ =
         |> bimap Fun.id (update_store initialComputer)
       in
       print_endline @@ show_functor_table compiler.functor_table;
-      print_endline @@ Lib.Machine.show_store computer.store (Some 30);
+      print_endline @@ Lib.Machine.show_store computer.store (Some 100) (Some 200);
       match compiler.entry_point with
       | None -> None
       | Some entry_point ->

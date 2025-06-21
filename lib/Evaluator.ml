@@ -103,8 +103,7 @@ let get_structure ((functor_label, functor_arity) : string * int)
       match Store.get store addr with
       | Reference _ ->
           print_endline @@ "free variable!";
-          print_endline @@ Machine.show_store computer.store None;
-          let _ = read_line () in
+          (* print_endline @@ Machine.show_store computer.store None; *)
           let structure = Structure (h_register + 1) in
           let func = Functor (functor_label, functor_arity) in
           let computer =
@@ -524,7 +523,7 @@ let eval_step (functor_table : Compiler.functor_map)
               }
             in
             print_endline @@ "free variable!";
-            print_endline @@ Machine.show_store ret.store (Some 150);
+            print_endline @@ Machine.show_store ret.store None (Some 150);
             let _ = read_line () in
             (ret, false)
         | Allocate n -> (allocate n computer, false)
@@ -534,10 +533,33 @@ let eval_step (functor_table : Compiler.functor_map)
         | Halt -> (computer, true)
         | TryMeElse l -> (try_me_else l computer, false)
         | RetryMeElse l -> (retry_me_else l computer, false)
-        | TrustMe -> (trust_me computer, false))
+        | TrustMe -> (trust_me computer, false)
+        | Debug ->
+            ({ computer with debug = true; p_register = p_register + 1 }, false)
+        )
     | _ -> failwith "unreachable eval_step"
 
 let rec eval (functor_table : Compiler.functor_map) (computer : Machine.t) :
     Machine.t =
-  let computer, stop = eval_step functor_table computer in
-  if stop then computer else eval functor_table computer
+  if computer.debug then debugger functor_table computer
+  else
+    let computer, stop = eval_step functor_table computer in
+    if stop then computer else eval functor_table computer
+
+and debugger (functor_table : Compiler.functor_map) (computer : Machine.t) :
+    Machine.t =
+  if computer.debug then
+    let cmd = read_line () in
+    match cmd with
+    | "x" ->
+        print_endline @@ Machine.show_x_registers computer.x_registers;
+        debugger functor_table computer
+    | "m" ->
+        print_endline @@ Machine.show_store computer.store (Some 100) (Some 200);
+        debugger functor_table computer
+    | "q" -> debugger functor_table { computer with debug = false }
+    | "h" -> computer
+    | _ ->
+        let computer, stop = eval_step functor_table computer in
+        if stop then computer else debugger functor_table computer
+  else eval functor_table computer
