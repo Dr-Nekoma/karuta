@@ -548,7 +548,7 @@ let rec eval (functor_table : Compiler.functor_map) (computer : Machine.t) :
 
 and debugger (functor_table : Compiler.functor_map) (computer : Machine.t) :
     Machine.t =
-  if computer.debug then
+  if computer.debug then (
     let cmd = read_line () in
     match cmd with
     | "x" ->
@@ -569,7 +569,10 @@ and debugger (functor_table : Compiler.functor_map) (computer : Machine.t) :
         debugger functor_table computer
     | "q" -> debugger functor_table { computer with debug = false }
     | "h" -> computer
-    | _ ->
+    | "" ->
         let computer, stop = eval_step functor_table computer in
         if stop then computer else debugger functor_table computer
+    | _ ->
+        print_endline "Unknown command";
+        debugger functor_table computer)
   else eval functor_table computer
