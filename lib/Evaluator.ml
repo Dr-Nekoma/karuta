@@ -564,6 +564,10 @@ and debugger (functor_table : Compiler.functor_map) (computer : Machine.t) :
         @@ Machine.show_store computer.store Store.stack_start
              (Store.stack_start + Store.Layout.stack_size);
         debugger functor_table computer
+    | "c" ->
+        print_endline
+        @@ Machine.show_store computer.store 0 Store.Layout.code_size;
+        debugger functor_table computer
     | "f" ->
         print_string @@ Compiler.show_functor_table functor_table;
         debugger functor_table computer
