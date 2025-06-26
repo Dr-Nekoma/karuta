@@ -95,10 +95,13 @@ and variables_of_term (elem : Ast.expr) : string S.t =
         S.empty elements
   | Variable { namev } -> S.add namev S.empty
 
+and not_debug ({ namef; arity; _ } : Ast.func) : bool =
+  not (namef = "debug" && arity = 0)
+
 and allocate_declaration : Ast.decl -> t =
  fun { head = { elements; _ } as head; body } ->
   let first_clause, other_clauses =
-    match body with
+    match List.filter not_debug body with
     | [] -> ([], [])
     | first_clause :: other_clauses ->
         ([ Ast.Functor first_clause ], other_clauses)
