@@ -13,6 +13,7 @@ module Cell = struct
     | PutValue of (register * register)
     | UnifyValue of register
     | Call of (Ast.tag * int)
+    | Execute of (Ast.tag * int)
     | Proceed
     | Allocate of int
     | Deallocate
@@ -96,6 +97,24 @@ let show_x_registers (registers : Cell.t IntMap.t) : string =
     registers ""
 [@@warning "-32"]
 
+let show_internal_registers (computer : t) : string =
+  "P: "
+  ^ string_of_int computer.p_register
+  ^ "\n" ^ "CP: "
+  ^ string_of_int computer.cp_register
+  ^ "\n" ^ "E: "
+  ^ string_of_int computer.e_register
+  ^ "\n" ^ "B: "
+  ^ string_of_int computer.b_register
+  ^ "\n" ^ "H: "
+  ^ string_of_int computer.h_register
+  ^ "\n" ^ "HB: "
+  ^ string_of_int computer.hb_register
+  ^ "\n" ^ "S: "
+  ^ string_of_int computer.s_register
+  ^ "\n" ^ "TR: "
+  ^ string_of_int computer.tr_register
+
 let initialize () : t =
   {
     store = Store.initialize Store.empty Store.mem_size Cell.Empty;
@@ -104,7 +123,7 @@ let initialize () : t =
     p_register = 0;
     cp_register = 0;
     e_register = Store.stack_start - 1;
-    b_register = Store.stack_start - 1;
+    b_register = Store.stack_start - 2;
     h_register = Store.heap_start;
     hb_register = Store.heap_start;
     s_register = Store.heap_start;
@@ -112,5 +131,5 @@ let initialize () : t =
     mode = Mode.Read;
     fail = false;
     debug = false;
-    trace = false;
+    trace = true;
   }

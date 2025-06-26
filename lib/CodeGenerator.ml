@@ -279,8 +279,18 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
   let generator, allocator, store =
     List.fold_left allocate_clause (generator, allocator, store) elements
   in
+  (* TODO: We know the last instruction will be a Call because of the fold above *)
+  (* TODO: Corner case being Debug instruction *)
+  let previous_p_register = generator.p_register - 1 in
+  let (Cell.Instruction (Cell.Call lastCallFunctor)) =
+    Store.code_get store previous_p_register
+  in
   (generator, store)
-  |> add_instruction Cell.Deallocate
+  |> add_instruction (Cell.Execute lastCallFunctor)
+  |> (fun (generator, store) ->
+       ( generator,
+         Store.code_put (Cell.Instruction Cell.Deallocate) previous_p_register
+           store ))
   |> put_allocator allocator
 
 and generate_functor (generator, ({ registers; _ } as allocator), store)

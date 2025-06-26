@@ -39,16 +39,14 @@ let get_register (register : Cell.register)
           else failwith "stack overflow"
       | _ -> failwith "invalid stack size (Not ArgCount)")
 
-let put_structure (register : Cell.register) (functor_label, functor_arity)
+let put_structure (x_register : Cell.register) (functor_label, functor_arity)
     ({ store; h_register; _ } as computer) : Machine.t =
-  let structure = Machine.Cell.Structure (h_register + 1) in
-  let reference = Reference h_register in
   let func = Functor (functor_label, functor_arity) in
+  let structure = Machine.Cell.Structure h_register in
   store
-  |> Store.heap_put func (h_register + 1)
-  |> Store.heap_put structure h_register
-  |> (fun store -> { computer with store; h_register = h_register + 2 })
-  |> set_register register reference
+  |> Store.heap_put func h_register
+  |> (fun store -> { computer with store; h_register = h_register + 1 })
+  |> set_register x_register structure
 
 let set_variable (register : Cell.register)
     ({ store; h_register; _ } as computer) =
@@ -215,18 +213,27 @@ let unify_value (register : Cell.register)
         s_register = s_register + 1;
       }
 
-let put_variable (x_register : Cell.register) (a_register : Cell.register)
-    ({ store; h_register; _ } as computer) : Machine.t =
-  let reference = Reference h_register in
-  store
-  |> Store.heap_put reference h_register
-  |> (fun store -> { computer with store; h_register = h_register + 1 })
-  |> set_register a_register reference
-  |> set_register x_register reference
+let instruction_size = 1
 
-let put_value (x_register : Cell.register) (a_register : Cell.register) computer
-    : Machine.t =
-  let value = get_register x_register computer in
+let put_variable (register : Cell.register) (a_register : Cell.register)
+    ({ store; e_register; h_register; _ } as computer) : Machine.t =
+  match register with
+  | X _ ->
+      let reference = Reference h_register in
+      store
+      |> Store.heap_put reference h_register
+      |> (fun store -> { computer with store; h_register = h_register + 1 })
+      |> set_register a_register reference
+      |> set_register register reference
+  | Y y_register ->
+      let addr = e_register + y_register + 3 in
+      let reference = Reference addr in
+      store |> Store.stack_put reference addr |> fun store ->
+      set_register a_register reference { computer with store }
+
+let put_value (register : Cell.register) (a_register : Cell.register) computer :
+    Machine.t =
+  let value = get_register register computer in
   set_register a_register value computer
 
 let get_variable (x_register : Cell.register) (a_register : Cell.register)
@@ -240,23 +247,20 @@ let deallocate ({ e_register; store; _ } as computer) : Machine.t =
   if e_register < Store.stack_start then
     failwith "tried to return from top level"
   else
-    let p_register = Store.stack_get store (e_register + 1) in
+    let cp_register = Store.stack_get store (e_register + 1) in
     let e_register = Store.stack_get store e_register in
-    match (p_register, e_register) with
-    | Cell.Address p_register, Cell.Address e_register ->
-        { computer with p_register; e_register }
+    match (cp_register, e_register) with
+    | Cell.Address cp_register, Cell.Address e_register ->
+        { computer with cp_register; e_register }
     | _ -> failwith "unreachable deallocate"
-
-let instruction_size = 1
 
 let new_stack_pointer { e_register; b_register; store; _ } : int =
   if b_register < e_register then
-    if e_register < Store.stack_start then e_register + 3
+    if e_register < Store.stack_start then Store.stack_start
     else
       match Store.stack_get store (e_register + 2) with
       | Cell.ArgCount n -> n + e_register + 3
       | _ -> failwith "unreachable new_stack_pointer 0"
-  else if b_register < Store.stack_start then b_register + 7
   else
     match Store.stack_get store b_register with
     | Cell.ArgCount n -> n + b_register + 7
@@ -444,6 +448,15 @@ let call (functor' : Ast.tag * int) (functor_table : Compiler.functor_map)
     p_register = find functor' functor_table;
   }
 
+let execute (functor' : Ast.tag * int) (functor_table : Compiler.functor_map)
+    computer : Machine.t =
+  let open Compiler.FunctorMap in
+  {
+    computer with
+    arg_count = snd functor';
+    p_register = find functor' functor_table;
+  }
+
 let proceed ({ cp_register; _ } as computer) : Machine.t =
   { computer with p_register = cp_register }
 
@@ -457,7 +470,10 @@ let eval_step (functor_table : Compiler.functor_map)
     match Store.code_get store p_register with
     | Instruction instruction -> (
         if computer.trace then
-          print_endline @@ Machine.Cell.show_instruction instruction;
+          print_endline
+          @@ string_of_int computer.p_register
+          ^ ": "
+          ^ Machine.Cell.show_instruction instruction;
         match instruction with
         | GetStructure ((name, arity), register) ->
             ( {
@@ -528,8 +544,10 @@ let eval_step (functor_table : Compiler.functor_map)
             let _ = read_line () in
             (ret, false)
         | Allocate n -> (allocate n computer, false)
-        | Deallocate -> (deallocate computer, false)
+        | Deallocate ->
+            ({ (deallocate computer) with p_register = p_register + 1 }, false)
         | Call predicate -> (call predicate functor_table computer, false)
+        | Execute predicate -> (execute predicate functor_table computer, false)
         | Proceed -> (proceed computer, false)
         | Halt -> (computer, true)
         | TryMeElse l -> (try_me_else l computer, false)
@@ -552,6 +570,9 @@ and debugger (functor_table : Compiler.functor_map) (computer : Machine.t) :
   if computer.debug then (
     let cmd = read_line () in
     match cmd with
+    | "r" ->
+        print_endline @@ Machine.show_internal_registers computer;
+        debugger functor_table computer
     | "x" ->
         print_endline @@ Machine.show_x_registers computer.x_registers;
         debugger functor_table computer
@@ -577,7 +598,8 @@ and debugger (functor_table : Compiler.functor_map) (computer : Machine.t) :
         print_string "Trace ";
         print_endline @@ if computer.trace then "off" else "on";
         debugger functor_table { computer with trace = not computer.trace }
-    | "h" -> computer
+    | "n" -> computer
+    | "h" -> failwith "TODO: Add help for newcomers"
     | "" ->
         let computer, stop = eval_step functor_table computer in
         if stop then computer else debugger functor_table computer
