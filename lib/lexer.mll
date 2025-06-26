@@ -25,7 +25,6 @@ rule read =
   | '?' { QUERY }
   | '"'      { read_string (Buffer.create 17) lexbuf }
   | ":-" { HOLDS }
-  | int { LITERAL_INT (Int32.(of_string (Lexing.lexeme lexbuf))) }
   | ',' { COMMA }
   | '.' { DOT }
   | '[' { LEFT_DELIM }
@@ -35,7 +34,6 @@ rule read =
 
 and read_string buf =
   parse
-  | '"'       { LITERAL_STRING (Buffer.contents buf) }
   | '\\' '/'  { Buffer.add_char buf '/'; read_string buf lexbuf }
   | '\\' '\\' { Buffer.add_char buf '\\'; read_string buf lexbuf }
   | '\\' 'b'  { Buffer.add_char buf '\b'; read_string buf lexbuf }

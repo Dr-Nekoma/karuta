@@ -30,8 +30,7 @@
 (ocamllex lexer)
 
 (menhir
- (modules parser)
- (flags --trace))
+ (modules parser))
 
 (documentation
  (package karuta))
