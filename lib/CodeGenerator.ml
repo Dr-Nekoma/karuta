@@ -246,6 +246,7 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
           let scope_registers, instruction =
             match S.find_opt raw_register scope_registers with
             | None ->
+                (* TODO: figure out why Prev in triangle/3 is emitting a PutVariable *)
                 ( S.add raw_register scope_registers,
                   Cell.PutVariable (left_register, Cell.X counter) )
             | Some _ ->
