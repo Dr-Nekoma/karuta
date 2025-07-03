@@ -627,7 +627,7 @@ and debugger (functor_table : Compiler.functor_map) (computer : Machine.t) :
         print_string "Trace ";
         print_endline @@ if computer.trace then "off" else "on";
         debugger functor_table { computer with trace = not computer.trace }
-    | "n" -> computer
+    | "halt" -> computer
     | "h" -> failwith "TODO: Add help for newcomers"
     | "" ->
         let computer, stop = eval_step functor_table computer in
