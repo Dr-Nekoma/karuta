@@ -86,8 +86,8 @@ let trail (a : address)
 
 let bind (a1 : address) (a2 : address) ({ store; _ } as computer : Machine.t) :
     Machine.t =
-  let t1 = Store.get store a1 in
-  let t2 = Store.get store a2 in
+  let t1 = match Store.get store a1 with Functor _ -> Structure a1 | v -> v in
+  let t2 = match Store.get store a2 with Functor _ -> Structure a2 | v -> v in
   if is_reference t1 && ((not (is_reference t2)) || a2 < a1) then
     { computer with store = store |> Store.put t2 a1 } |> trail a1
   else { computer with store = store |> Store.put t1 a2 } |> trail a2
@@ -124,6 +124,15 @@ let get_structure ((functor_label, functor_arity) : string * int)
             when label = functor_label && arity = functor_arity ->
               { computer with s_register = a + 1; mode = Read }
           | _ -> { computer with fail = true })
+      | _ -> { computer with fail = true })
+  | Structure a -> (
+      print_endline @@ "get_structure: Structure " ^ string_of_int a;
+      print_endline functor_label;
+      print_endline @@ string_of_int functor_arity;
+      match Store.heap_get store a with
+      | Functor (label, arity)
+        when label = functor_label && arity = functor_arity ->
+          { computer with s_register = a + 1; mode = Read }
       | _ -> { computer with fail = true })
   | x ->
       print_endline @@ Cell.show x;
@@ -170,26 +179,23 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
         match (Store.get store d1, Store.get store d2) with
         | Reference _, _ | _, Reference _ ->
             loop @@ bind d1 d2 { computer with store }
-        | Structure v1, Structure v2 -> (
-            match (Store.get store v1, Store.get store v2) with
-            | Functor (s1, n1), Functor (s2, n2) ->
-                let open Batteries in
-                if s1 = s2 && n1 = n2 then
-                  loop
-                    {
-                      computer with
-                      store =
-                        List.fold_left
-                          (fun store i ->
-                            print_endline @@ "in fold: " ^ string_of_int i;
-                            store
-                            |> Store.pdl_push (Address (v1 + i))
-                            |> Store.pdl_push (Address (v2 + i)))
-                          store
-                          (List.of_enum (1 -- n1));
-                    }
-                else { computer with fail = true }
-            | _, _ -> failwith "Unreachable")
+        | Functor (s1, n1), Functor (s2, n2) ->
+            let open Batteries in
+            if s1 = s2 && n1 = n2 then
+              loop
+                {
+                  computer with
+                  store =
+                    List.fold_left
+                      (fun store i ->
+                        print_endline @@ "in fold: " ^ string_of_int i;
+                        store
+                        |> Store.pdl_push (Address (d1 + i))
+                        |> Store.pdl_push (Address (d2 + i)))
+                      store
+                      (List.of_enum (1 -- n1));
+                }
+            else { computer with fail = true }
         | _, _ -> { computer with fail = true }
       else loop computer
   in
@@ -231,10 +237,32 @@ let put_variable (register : Cell.register) (a_register : Cell.register)
       store |> Store.stack_put reference addr |> fun store ->
       set_register a_register reference { computer with store }
 
+let deref_cell (cell : Cell.t) store : Cell.t =
+  match cell with
+  | Reference address -> Store.get store (deref address store)
+  | Structure _ -> cell
+  | _ -> failwith "unreachable deref_cell"
+
 let put_value (register : Cell.register) (a_register : Cell.register) computer :
     Machine.t =
   let value = get_register register computer in
-  set_register a_register value computer
+  match register with
+  | Y _ -> (
+      let derefed_cell = deref_cell value computer.store in
+      match derefed_cell with
+      | Reference address when address < computer.e_register ->
+          set_register a_register (Store.get computer.store address) computer
+      | Reference address ->
+          let { h_register; store; _ } = computer in
+          let reference = Reference h_register in
+          store
+          |> Store.heap_put reference h_register
+          |> (fun store ->
+               bind address h_register
+                 { computer with store; h_register = h_register + 1 })
+          |> set_register a_register reference
+      | _ -> set_register a_register value computer)
+  | X _ -> set_register a_register value computer
 
 let get_variable (x_register : Cell.register) (a_register : Cell.register)
     computer : Machine.t =
@@ -525,7 +553,8 @@ let eval_step (functor_table : Compiler.functor_map)
               ( get_register x_register computer,
                 get_register a_register computer )
             with
-            | Reference x_addr, Reference a_addr ->
+            | ( (Reference x_addr | Structure x_addr),
+                (Reference a_addr | Structure a_addr) ) ->
                 ( {
                     (get_value x_addr a_addr computer) with
                     p_register = p_register + 1;
