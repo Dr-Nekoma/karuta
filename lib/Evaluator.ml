@@ -589,50 +589,7 @@ let eval_step (functor_table : Compiler.functor_map)
 
 let rec eval (functor_table : Compiler.functor_map) (computer : Machine.t) :
     Machine.t =
-  if computer.debug then debugger functor_table computer
+  if computer.debug then Debugger.run functor_table eval_step eval computer
   else
     let computer, stop = eval_step functor_table computer in
     if stop then computer else eval functor_table computer
-
-and debugger (functor_table : Compiler.functor_map) (computer : Machine.t) :
-    Machine.t =
-  if computer.debug then (
-    let cmd = read_line () in
-    match cmd with
-    | "r" ->
-        print_endline @@ Machine.show_internal_registers computer;
-        debugger functor_table computer
-    | "x" ->
-        print_endline @@ Machine.show_x_registers computer.x_registers;
-        debugger functor_table computer
-    | "m" ->
-        print_endline
-        @@ Machine.show_store computer.store Store.heap_start
-             (Store.heap_start + Store.Layout.heap_size);
-        debugger functor_table computer
-    | "s" ->
-        print_endline
-        @@ Machine.show_store computer.store Store.stack_start
-             (Store.stack_start + Store.Layout.stack_size);
-        debugger functor_table computer
-    | "c" ->
-        print_endline
-        @@ Machine.show_store computer.store 0 Store.Layout.code_size;
-        debugger functor_table computer
-    | "f" ->
-        print_string @@ Compiler.show_functor_table functor_table;
-        debugger functor_table computer
-    | "q" -> debugger functor_table { computer with debug = false }
-    | "t" ->
-        print_string "Trace ";
-        print_endline @@ if computer.trace then "off" else "on";
-        debugger functor_table { computer with trace = not computer.trace }
-    | "halt" -> computer
-    | "h" -> failwith "TODO: Add help for newcomers"
-    | "" ->
-        let computer, stop = eval_step functor_table computer in
-        if stop then computer else debugger functor_table computer
-    | _ ->
-        print_endline "Unknown command";
-        debugger functor_table computer)
-  else eval functor_table computer

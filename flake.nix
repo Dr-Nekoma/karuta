@@ -74,6 +74,7 @@
             buildInputs = [
               ocamlPackages.menhir
               ocamlPackages.ppx_deriving
+              ocamlPackages.ppx_enumerate              
               ocamlPackages.ppxlib
               ocamlPackages.batteries
               ocamlPackages.earlybird
