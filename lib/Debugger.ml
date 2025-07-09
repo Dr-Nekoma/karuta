@@ -15,32 +15,38 @@ type action =
 type description = string
 type shortcut = string
 
-let action_description : action -> description = function
-  | ShowInternalRegisters -> "Display internal registers"
-  | ShowXRegisters -> "Display temporary (X) registers"
-  | ShowHeap -> "Display heap memory region"
-  | ShowStack -> "Display stack memory region"
-  | ShowCode -> "Display code memory region"
-  | ShowFunctorTable -> "Display functor table"
-  | DisableDebug -> "Disable debug mode"
-  | ToggleTrace -> "Toggle trace"
-  | Halt -> "Halt execution"
-  | Help -> "Display list of all debug actions"
-  | Step -> "Proceed to next instruction"
+let action_info : action -> shortcut * description = function
+  | ShowInternalRegisters -> ("r", "Display internal registers")
+  | ShowXRegisters -> ("x", "Display temporary (X) registers")
+  | ShowHeap -> ("m", "Display heap memory region")
+  | ShowStack -> ("s", "Display stack memory region")
+  | ShowCode -> ("c", "Display code memory region")
+  | ShowFunctorTable -> ("f", "Display functor table")
+  | DisableDebug -> ("q", "Disable debug mode")
+  | ToggleTrace -> ("t", "Toggle trace")
+  | Halt -> ("halt", "Halt execution")
+  | Help -> ("h", "Display list of all debug actions")
+  | Step -> ("", "Proceed to next instruction")
 
-let string_action : shortcut -> action option = function
-  | "r" -> Some ShowInternalRegisters
-  | "x" -> Some ShowXRegisters
-  | "m" -> Some ShowHeap
-  | "s" -> Some ShowStack
-  | "c" -> Some ShowCode
-  | "f" -> Some ShowFunctorTable
-  | "q" -> Some DisableDebug
-  | "t" -> Some ToggleTrace
-  | "halt" -> Some Halt
-  | "h" -> Some Help
-  | "" -> Some Step
-  | _ -> None
+let help_message : string =
+  let format_empty_string shortcut =
+    if shortcut = "" then "<EMPTY>" else shortcut
+  in
+  let format_action action =
+    let shortcut, description = action_info action in
+    format_empty_string shortcut ^ " : " ^ description
+  in
+  let folder acc elem = acc ^ "\n" ^ format_action elem in
+  List.fold_left folder "" all_of_action ^ "\n\n"
+
+let parse_action (cmd : shortcut) : action option =
+  let shortcuts =
+    List.map (fun action -> (action, fst @@ action_info action)) all_of_action
+  in
+  let match_action (_, shortcut) = shortcut = cmd in
+  match List.find_opt match_action shortcuts with
+  | Some (action, _) -> Some action
+  | None -> None
 
 let rec run (functor_table : Compiler.functor_map)
     (stepper : Compiler.functor_map -> Machine.t -> Machine.t * bool)
@@ -48,7 +54,7 @@ let rec run (functor_table : Compiler.functor_map)
     (computer : Machine.t) : Machine.t =
   if computer.debug then (
     let action = read_line () in
-    match string_action action with
+    match parse_action action with
     | Some ShowInternalRegisters ->
         print_endline @@ Machine.show_internal_registers computer;
         run functor_table stepper eval computer
@@ -80,7 +86,9 @@ let rec run (functor_table : Compiler.functor_map)
         run functor_table stepper eval
           { computer with trace = not computer.trace }
     | Some Halt -> computer
-    | Some Help -> failwith "TODO: Add help for newcomers"
+    | Some Help ->
+        print_string help_message;
+        run functor_table stepper eval computer
     | Some Step ->
         let computer, stop = stepper functor_table computer in
         if stop then computer else run functor_table stepper eval computer
