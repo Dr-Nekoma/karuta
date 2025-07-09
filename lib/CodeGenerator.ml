@@ -13,16 +13,10 @@ type t = {
   p_register : int;
   terms : RegisterAllocator.term_queue;
   variables : RegisterAllocator.variable_set;
-  scope_registers : register_set;
 }
 
 let initialize (begin_addr : int) : t =
-  {
-    p_register = begin_addr;
-    terms = FT.empty;
-    variables = S.empty;
-    scope_registers = S.empty;
-  }
+  { p_register = begin_addr; terms = FT.empty; variables = S.empty }
 
 let reset_variables
     (({ p_register; _ }, allocators, store) :
@@ -120,15 +114,12 @@ module Fact : Fact = struct
         |> emit_queue_arguments
 
   and emit_argument
-      (( ({ variables; scope_registers; _ } as generator),
-         ({ registers; _ } as allocator),
-         store ) :
+      ((({ variables; _ } as generator), ({ registers; _ } as allocator), store) :
         t * RegisterAllocator.t * Cell.t Store.t) (index : int)
       (elem : Ast.expr) : t * RegisterAllocator.t * Cell.t Store.t =
     let open RegisterAllocator.RegisterMap in
     let raw_register = find elem registers in
     let register = cell_register raw_register in
-    let scope_registers = S.add raw_register scope_registers in
     let arg_register = Cell.X index in
     match elem with
     | Variable { namev } ->
@@ -138,14 +129,12 @@ module Fact : Fact = struct
               (S.add namev variables, Cell.GetVariable (register, arg_register))
           | Some _ -> (variables, Cell.GetValue (register, arg_register))
         in
-        ({ generator with variables; scope_registers }, store)
+        ({ generator with variables }, store)
         |> add_instruction instruction
         |> put_allocator allocator
     | Functor { namef; arity; elements } ->
         let instruction = Cell.GetStructure ((namef, arity), arg_register) in
-        let generator, store =
-          add_instruction instruction ({ generator with scope_registers }, store)
-        in
+        let generator, store = add_instruction instruction (generator, store) in
         List.fold_left emit_nested_argument
           (generator, allocator, store)
           elements
@@ -231,7 +220,7 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
       ({ namef; elements; arity } : Ast.func) :
       t * RegisterAllocator.t * Cell.t Store.t =
     let allocate_argument
-        (( ( ({ scope_registers; _ } as generator),
+        (( ( ({ variables; _ } as generator),
              ({ registers; _ } as allocator),
              store ),
            counter ) :
@@ -239,22 +228,20 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
         (individual_element : Ast.expr) :
         (t * RegisterAllocator.t * Cell.t Store.t) * int =
       match individual_element with
-      | Variable _ as var ->
+      | Variable { namev } as var ->
           let open RegisterAllocator.RegisterMap in
-          let raw_register = find var registers in
-          let left_register = cell_register raw_register in
-          let scope_registers, instruction =
-            match S.find_opt raw_register scope_registers with
+          let left_register = cell_register @@ find var registers in
+          let variables, instruction =
+            match S.find_opt namev variables with
             | None ->
                 (* TODO: figure out why Prev in triangle/3 is emitting a PutVariable *)
-                ( S.add raw_register scope_registers,
+                ( S.add namev variables,
                   Cell.PutVariable (left_register, Cell.X counter) )
             | Some _ ->
-                (scope_registers, Cell.PutValue (left_register, Cell.X counter))
+                (variables, Cell.PutValue (left_register, Cell.X counter))
           in
           let generator, store =
-            add_instruction instruction
-              ({ generator with scope_registers }, store)
+            add_instruction instruction ({ generator with variables }, store)
           in
           ((generator, allocator, store), counter + 1)
       | Functor func as f ->

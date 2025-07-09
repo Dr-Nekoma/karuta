@@ -5,6 +5,7 @@ type action =
   | ShowStack
   | ShowCode
   | ShowFunctorTable
+  (* TODO: Make this overwrite subsequent debug instructions until program ends *)
   | DisableDebug
   | ToggleTrace
   | Halt

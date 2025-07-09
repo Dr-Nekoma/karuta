@@ -45,11 +45,11 @@ end
 module IM = BatIMap
 
 module Store = Store.Make (struct
-  let code_size = 100
-  let heap_size = 100
-  let stack_size = 100
-  let pdl_size = 100
-  let trail_size = 100
+  let code_size = 1000
+  let heap_size = 1000
+  let stack_size = 1000
+  let pdl_size = 1000
+  let trail_size = 1000
 end)
 
 module IntMap = Map.Make (Int)
