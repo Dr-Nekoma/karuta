@@ -94,6 +94,6 @@ let rec run (functor_table : Compiler.functor_map)
         let computer, stop = stepper functor_table computer in
         if stop then computer else run functor_table stepper eval computer
     | None ->
-        print_endline "Unknown command";
+        print_endline "Unknown debug action";
         run functor_table stepper eval computer)
   else eval functor_table computer
