@@ -150,7 +150,6 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
     |> fun store -> { computer with store; fail = false }
   in
   let rec loop ({ store; fail; _ } as computer) : Machine.t =
-    (* FIXME: figure out why Prev in recursive call in triangle.krt is not unifying *)
     if Store.pdl_empty store || fail then computer
     else
       let Address p1, store = Store.pdl_pop store in
