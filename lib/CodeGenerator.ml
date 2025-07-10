@@ -36,6 +36,7 @@ let cell_register : RegisterAllocator.register -> Cell.register = function
 and add_instruction (instruction : Cell.instruction)
     ((({ p_register; _ } as generator), store) : t * Cell.t Store.t) :
     t * Cell.t Store.t =
+  (* TODO Add compiler builtins for better dev experience *)
   let real_instruction =
     match instruction with Cell.Call ("debug", 0) -> Cell.Debug | inst -> inst
   in
@@ -118,8 +119,7 @@ module Fact : Fact = struct
         t * RegisterAllocator.t * Cell.t Store.t) (index : int)
       (elem : Ast.expr) : t * RegisterAllocator.t * Cell.t Store.t =
     let open RegisterAllocator.RegisterMap in
-    let raw_register = find elem registers in
-    let register = cell_register raw_register in
+    let register = cell_register @@ find elem registers in
     let arg_register = Cell.X index in
     match elem with
     | Variable { namev } ->
@@ -234,7 +234,6 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
           let variables, instruction =
             match S.find_opt namev variables with
             | None ->
-                (* TODO: figure out why Prev in triangle/3 is emitting a PutVariable *)
                 ( S.add namev variables,
                   Cell.PutVariable (left_register, Cell.X counter) )
             | Some _ ->

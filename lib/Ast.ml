@@ -4,7 +4,7 @@ type expr = Variable of var | Functor of func [@@deriving show, ord]
 
 and clause =
   | MultiDeclaration of (decl * decl list)
-  | QueryConjunction of func (* FIXME: actually make a multi-query *)
+  | QueryConjunction of func (* TODO: actually make a multi-query *)
 [@@deriving show, ord]
 
 and parser_clause = Declaration of decl | Query of func [@@deriving show, ord]

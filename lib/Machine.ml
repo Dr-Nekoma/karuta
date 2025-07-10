@@ -76,14 +76,14 @@ type t = {
 let show_store (store : Cell.t Store.t) (start_index : int) (end_index : int) :
     string =
   match
-    Option.map fst
-    @@ Option.map
+    Option.map
+      (Fun.compose fst
          (Store.fold_left
             (fun (s, n) elem ->
               ( (if elem = Cell.Empty then s
                  else s ^ string_of_int n ^ ": " ^ " " ^ Cell.show elem ^ "\n"),
                 n + 1 ))
-            ("", start_index))
+            ("", start_index)))
     @@ Store.window start_index end_index store
   with
   | None -> "Invalid bounds"
