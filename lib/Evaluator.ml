@@ -7,8 +7,6 @@ let set_register (register : Cell.register) (cell : Cell.t)
   | Cell.X index_of_register ->
       let open Machine.IntMap in
       let x_registers = add index_of_register cell x_registers in
-      (* print_endline "setting register"; *)
-      (* print_endline @@ Machine.show_x_registers x_registers; *)
       { computer with x_registers }
   | Cell.Y index_of_register -> (
       let stack_frame_size = Store.stack_get store (e_register + 2) in
@@ -25,7 +23,6 @@ let set_register (register : Cell.register) (cell : Cell.t)
 
 let get_register (register : Cell.register)
     { store; x_registers; e_register; _ } : Cell.t =
-  (* print_endline @@ Machine.show_x_registers x_registers; *)
   match register with
   | Cell.X index_of_register ->
       let open Machine.IntMap in
@@ -100,8 +97,6 @@ let get_structure ((functor_label, functor_arity) : string * int)
       let addr = deref address store in
       match Store.get store addr with
       | Reference _ ->
-          print_endline @@ "free variable!";
-          (* print_endline @@ Machine.show_store computer.store None; *)
           let structure = Structure (h_register + 1) in
           let func = Functor (functor_label, functor_arity) in
           let computer =
@@ -116,9 +111,6 @@ let get_structure ((functor_label, functor_arity) : string * int)
           in
           { computer with h_register = h_register + 2; mode = Write }
       | Structure a -> (
-          print_endline @@ "get_structure: Structure " ^ string_of_int a;
-          print_endline functor_label;
-          print_endline @@ string_of_int functor_arity;
           match Store.heap_get store a with
           | Functor (label, arity)
             when label = functor_label && arity = functor_arity ->
@@ -126,28 +118,21 @@ let get_structure ((functor_label, functor_arity) : string * int)
           | _ -> { computer with fail = true })
       | _ -> { computer with fail = true })
   | Structure a -> (
-      print_endline @@ "get_structure: Structure " ^ string_of_int a;
-      print_endline functor_label;
-      print_endline @@ string_of_int functor_arity;
       match Store.heap_get store a with
       | Functor (label, arity)
         when label = functor_label && arity = functor_arity ->
           { computer with s_register = a + 1; mode = Read }
       | _ -> { computer with fail = true })
-  | x ->
-      print_endline @@ Cell.show x;
-      failwith "unreachable get_structure"
+  | _ -> failwith "unreachable get_structure"
 
 let unify_variable (register : Cell.register)
     ({ store; h_register; s_register; mode; _ } as computer) : Machine.t =
   match mode with
   | Read ->
       let value = Store.heap_get store s_register in
-      print_endline @@ "read: " ^ show value;
       set_register register value { computer with s_register = s_register + 1 }
   | Write ->
       let reference = Reference h_register in
-      print_endline @@ "write: " ^ show reference;
       store
       |> Store.heap_put reference h_register
       |> (fun store ->
@@ -160,7 +145,6 @@ let unify_variable (register : Cell.register)
       |> set_register register reference
 
 let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
-  print_endline @@ "unify: " ^ string_of_int a1 ^ " " ^ string_of_int a2;
   let preparedComputer =
     store |> Store.pdl_push (Address a1) |> Store.pdl_push (Address a2)
     |> fun store -> { computer with store; fail = false }
@@ -173,8 +157,6 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
       let Address p2, store = Store.pdl_pop store in
       let d1 = deref p1 store in
       let d2 = deref p2 store in
-      print_endline @@ "unify loop: " ^ string_of_int d1 ^ " "
-      ^ string_of_int d2;
       if d1 != d2 then
         match (Store.get store d1, Store.get store d2) with
         | Reference _, _ | _, Reference _ ->
@@ -188,7 +170,6 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
                   store =
                     List.fold_left
                       (fun store i ->
-                        print_endline @@ "in fold: " ^ string_of_int i;
                         store
                         |> Store.pdl_push (Address (d1 + i))
                         |> Store.pdl_push (Address (d2 + i)))
@@ -492,16 +473,10 @@ let eval_step (functor_table : Compiler.functor_map)
     ({ store; p_register; fail; _ } as computer : Machine.t) : Machine.t * bool
     =
   let open Machine.Cell in
-  (* print_endline @@ string_of_int p_register; *)
   if fail then (backtrack computer, false)
   else
     match Store.code_get store p_register with
     | Instruction instruction -> (
-        if computer.trace then
-          print_endline
-          @@ string_of_int computer.p_register
-          ^ ": "
-          ^ Machine.Cell.show_instruction instruction;
         match instruction with
         | GetStructure ((name, arity), register) ->
             ( {
@@ -562,16 +537,11 @@ let eval_step (functor_table : Compiler.functor_map)
                   false )
             | _ -> failwith "unreachable GetValue")
         | UnifyValue register ->
-            let ret =
-              {
+            ( {
                 (unify_value register computer) with
                 p_register = p_register + 1;
-              }
-            in
-            print_endline @@ "free variable!";
-            print_endline @@ Machine.show_store ret.store 0 150;
-            let _ = read_line () in
-            (ret, false)
+              },
+              false )
         | Allocate n -> (allocate n computer, false)
         | Deallocate ->
             ({ (deallocate computer) with p_register = p_register + 1 }, false)
