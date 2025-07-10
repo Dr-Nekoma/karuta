@@ -20,7 +20,7 @@ module Cell = struct
     | TryMeElse of int
     | RetryMeElse of int
     | TrustMe
-    | Halt
+    | Halt of int
     | Debug
   [@@deriving show]
 
@@ -71,6 +71,7 @@ type t = {
   fail : bool;
   debug : bool;
   trace : bool;
+  args : int option;
 }
 
 let show_store (store : Cell.t Store.t) (start_index : int) (end_index : int) :
@@ -132,4 +133,5 @@ let initialize () : t =
     fail = false;
     debug = false;
     trace = true;
+    args = None;
   }

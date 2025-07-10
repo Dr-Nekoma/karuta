@@ -30,6 +30,9 @@ let _ =
       match compiler.entry_point with
       | None -> None
       | Some entry_point ->
-          Some
-            (Lib.Evaluator.eval compiler.functor_table
-               { computer with p_register = entry_point.p_register }))
+          let computer =
+            Lib.Evaluator.eval compiler.functor_table
+              { computer with p_register = entry_point.p_register }
+          in
+          print_endline @@ Lib.Print.query_args computer;
+          Some computer)
