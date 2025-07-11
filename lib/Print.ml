@@ -1,5 +1,8 @@
 open Machine
 
+type ast = Functor of string * ast list
+[@@deriving show]
+
 let rec inspect (store : Cell.t Store.t) (register : Cell.t) : string =
   match register with
   | Structure address -> (
@@ -19,7 +22,33 @@ let rec inspect (store : Cell.t Store.t) (register : Cell.t) : string =
       | Reference _ -> failwith "TODO: take care of free variables"
       | _ -> inspect store next)
   | Empty | Functor _ | ArgCount _ | Instruction _ | Address _ ->
-      failwith "unrechable inspect"
+     failwith "unrechable inspect"
+
+let rec to_ast (store : Cell.t Store.t) (register : Cell.t) : ast =
+  match register with
+  | Structure addr -> (
+      match Store.get store addr with
+      | Functor (name, arity) ->
+          let rec collect i acc =
+            if i = arity then List.rev acc
+            else
+              let child = Store.get store (addr + i + 1) in
+              collect (i + 1) (to_ast store child :: acc)
+          in
+          Functor (name, collect 0 [])
+      | _ -> failwith "Expected Functor at structure address"
+    )
+  | Reference addr ->
+      to_ast store (Store.get store (Evaluator.deref addr store))
+  | _ -> failwith "Cannot convert non-structured term to AST"
+
+let query_ast_args ({ x_registers; args; store; _ } : Machine.t) : ast list =
+  match args with
+  | None -> []
+  | Some how_many ->
+      let open Machine.IntMap in
+      let find_register idx = find idx x_registers in
+      List.init how_many (fun i -> to_ast store (find_register i))
 
 let query_args ({ x_registers; args; store; _ } : Machine.t) : string =
   match args with

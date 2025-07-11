@@ -36,3 +36,33 @@ let _ =
           in
           print_endline @@ Lib.Print.query_args computer;
           Some computer)
+
+let _ =
+  let open Option in
+  let+ content =
+    In_channel.with_open_text "examples/triangular.krt" (fun fc ->
+        try Some (In_channel.input_all fc) with End_of_file -> None)
+  in
+  match Lib.Parse.parse content with
+  | [] ->
+      print_endline "File could not be parsed.";
+      None
+  | decls_queries -> begin
+      let compiler, computer =
+        Lib.Machine.initialize () |> fun initialComputer ->
+        Lib.Compiler.compile
+          ( Lib.Preprocessor.group_clauses decls_queries,
+            Lib.Compiler.initialize (),
+            initialComputer.store )
+        |> bimap Fun.id (update_store initialComputer)
+      in
+      match compiler.entry_point with
+      | None -> None
+      | Some entry_point ->
+          let computer =
+            Lib.Evaluator.eval compiler.functor_table
+              { computer with p_register = entry_point.p_register }
+          in
+          List.iter (fun x -> print_endline @@ Lib.Print.show_ast x) @@ Lib.Print.query_ast_args computer;
+          Some computer 
+      end
