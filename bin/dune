@@ -7,6 +7,6 @@
  (name main)
  (public_name karuta)
  (modules main)
- (libraries lib)
+ (libraries karuta_lib)
  (modes byte exe)
  (package karuta))

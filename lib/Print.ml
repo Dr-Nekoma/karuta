@@ -1,8 +1,5 @@
 open Machine
 
-type ast = Functor of string * ast list
-[@@deriving show]
-
 let rec inspect (store : Cell.t Store.t) (register : Cell.t) : string =
   match register with
   | Structure address -> (
@@ -24,7 +21,7 @@ let rec inspect (store : Cell.t Store.t) (register : Cell.t) : string =
   | Empty | Functor _ | ArgCount _ | Instruction _ | Address _ ->
      failwith "unrechable inspect"
 
-let rec to_ast (store : Cell.t Store.t) (register : Cell.t) : ast =
+let rec to_ast (store : Cell.t Store.t) (register : Cell.t) : Protocol.ast =
   match register with
   | Structure addr -> (
       match Store.get store addr with
@@ -42,7 +39,7 @@ let rec to_ast (store : Cell.t Store.t) (register : Cell.t) : ast =
       to_ast store (Store.get store (Evaluator.deref addr store))
   | _ -> failwith "Cannot convert non-structured term to AST"
 
-let query_ast_args ({ x_registers; args; store; _ } : Machine.t) : ast list =
+let query_ast_args ({ x_registers; args; store; _ } : Machine.t) : Protocol.ast list =
   match args with
   | None -> []
   | Some how_many ->

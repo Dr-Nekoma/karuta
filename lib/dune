@@ -9,25 +9,38 @@
    (:standard -w -8))))
 
 (library
- (name lib)
- (modules
-  Print
-  Ast
-  CodeGenerator
-  Store
-  Machine
-  RegisterAllocator
-  Compiler
-  Debugger
-  Evaluator
-  Parse
-  Parser
-  Preprocessor
-  Lexer)
- (libraries batteries)
+ (name karuta_lib)
+ ;; (modules
+ ;;  Protocol
+ ;;  Print
+ ;;  Server
+ ;;  Ast
+ ;;  CodeGenerator
+ ;;  Store
+ ;;  Machine
+ ;;  RegisterAllocator
+ ;;  Compiler
+ ;;  Debugger
+ ;;  Evaluator
+ ;;  Parse
+ ;;  Parser
+ ;;  Preprocessor
+ ;;  Lexer)
+ (libraries
+   batteries
+   ;; sexplib
+   lwt
+   lwt.unix
+   lwt-exit)
  (package karuta)
  (preprocess
-  (pps ppx_deriving.show ppx_deriving.std ppx_deriving.ord ppx_enumerate)))
+  (pps
+    ppx_deriving.show
+    ppx_deriving.std
+    ppx_deriving.ord
+    ppx_enumerate
+    ppx_sexp_conv
+  )))
 
 (ocamllex lexer)
 

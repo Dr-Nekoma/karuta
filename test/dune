@@ -5,7 +5,7 @@
 
 (test
  (name say_hi)
- (libraries lib)
+ (libraries karuta_lib)
  (package karuta))
 
 ; More information on Cram tests can be found in the Dune documentation:
