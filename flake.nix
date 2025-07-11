@@ -195,6 +195,7 @@
               ocamlPackages.ppxlib
               ocamlPackages.earlybird
               ocamlPackages.ppx_sexp_conv
+              ocamlPackages.sexplib
               ocamlPackages.lwt
               ocamlPackages.lwt-exit
             ];
