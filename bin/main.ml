@@ -66,3 +66,5 @@ let _ =
           List.iter (fun x -> print_endline @@ Karuta_lib.Protocol.show_ast x) @@ Karuta_lib.Print.query_ast_args computer;
           Some computer 
       end
+
+let () = Karuta_lib.Server.start ()

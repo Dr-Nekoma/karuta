@@ -1,8 +1,47 @@
 open Lwt
 open Unix
 
+module Result = struct
+  let ( let+ ) = Result.bind
+end
+
+let bimap f g (a1, a2) = (f a1, g a2)
+
+let update_store (computer : Machine.t)
+    (store : Machine.Cell.t Machine.Store.t) : Machine.t =
+  { computer with store }
+
+let program_output =
+  let open Result in
+  let+ content =
+    In_channel.with_open_text "examples/triangular.krt" (fun fc ->
+        try Ok (In_channel.input_all fc) with End_of_file -> Error "End of File!")
+  in
+  match Parse.parse content with
+  | [] ->
+      print_endline "File could not be parsed.";
+      Error "Could not parse file"
+  | decls_queries -> begin
+      let compiler, computer =
+        Machine.initialize () |> fun initialComputer ->
+        Compiler.compile
+          ( Preprocessor.group_clauses decls_queries,
+            Compiler.initialize (),
+            initialComputer.store )
+        |> bimap Fun.id (update_store initialComputer)
+      in
+      match compiler.entry_point with
+      | None -> Error "Nothing"
+      | Some entry_point ->
+          let computer =
+            Evaluator.eval compiler.functor_table
+              { computer with p_register = entry_point.p_register }
+          in
+          Ok (Print.query_ast_args computer)
+      end
+
 let host = Unix.inet_addr_loopback
-let port = 7524
+let port = 7632
 
 let create_socket () : Lwt_unix.file_descr t =
   let sock = Lwt_unix.socket PF_INET SOCK_STREAM 0 in
@@ -28,7 +67,9 @@ let client_read sock maxlen =
   _read sock String.empty >>= fun x ->
   print_string "RECEIVED: ";
   print_endline x;
-  return x;
+  match program_output with
+  | Ok ast -> return (Sexplib.Sexp.to_string @@ Protocol.sexp_of_output ast);
+  | Error err -> failwith (Printf.sprintf "%s" err);
 [@@warning "-27-8-26"]
 
 let rec socket_read sock =

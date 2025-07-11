@@ -32,7 +32,7 @@ let rec to_ast (store : Cell.t Store.t) (register : Cell.t) : Protocol.ast =
               let child = Store.get store (addr + i + 1) in
               collect (i + 1) (to_ast store child :: acc)
           in
-          Functor (name, collect 0 [])
+          Functor {name; children = collect 0 []}
       | _ -> failwith "Expected Functor at structure address"
     )
   | Reference addr ->
