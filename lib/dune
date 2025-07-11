@@ -28,7 +28,7 @@
  ;;  Lexer)
  (libraries
    batteries
-   ;; sexplib
+   sexplib
    lwt
    lwt.unix
    lwt-exit)

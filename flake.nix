@@ -79,6 +79,7 @@
               batteries
               earlybird
               ppx_sexp_conv
+              sexplib
               lwt
               lwt-exit
               # Ocaml package dependencies needed to build go here.
