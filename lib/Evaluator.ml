@@ -1,8 +1,6 @@
 open Machine
 open Machine.Cell
 
-(* FIXME: figure out why plus[nil, X, succ[nil]]? breaks *)
-
 let set_register (register : Cell.register) (cell : Cell.t)
     ({ store; x_registers; e_register; _ } as computer) : Machine.t =
   match register with

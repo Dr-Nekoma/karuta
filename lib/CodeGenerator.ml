@@ -63,6 +63,10 @@ module type Fact = sig
     t * RegisterAllocator.t * Cell.t Store.t
 end
 
+(*
+   FIXME: combine Fact and Argument. Argument's implementation is broken, because
+   it doesn't properly handle arguments.
+*)
 module Fact : Fact = struct
   let rec emit_nested_argument
       (( ({ terms; variables; _ } as generator),
