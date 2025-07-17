@@ -13,10 +13,16 @@ type t = {
   p_register : int;
   terms : RegisterAllocator.term_queue;
   variables : RegisterAllocator.variable_set;
+  in_query : bool;
 }
 
 let initialize (begin_addr : int) : t =
-  { p_register = begin_addr; terms = FT.empty; variables = S.empty }
+  {
+    p_register = begin_addr;
+    terms = FT.empty;
+    variables = S.empty;
+    in_query = false;
+  }
 
 let reset_variables
     (({ p_register; _ }, allocators, store) :
@@ -158,7 +164,9 @@ module Argument : Argument = struct
         (Cell.register -> Cell.instruction)
         * (Cell.register -> Cell.instruction)
         * (Cell.register -> Cell.instruction))
-      ((({ variables; _ } as generator), ({ registers; _ } as allocator), store) :
+      (( ({ variables; in_query; _ } as generator),
+         ({ registers; _ } as allocator),
+         store ) :
         t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.expr) :
       t * RegisterAllocator.t * Cell.t Store.t =
     let open RegisterAllocator.RegisterMap in
@@ -172,6 +180,9 @@ module Argument : Argument = struct
         in
         ({ generator with variables }, store)
         |> add_instruction instruction
+        |> (if in_query then
+              add_instruction (Cell.QueryVariable (register, namev))
+            else Fun.id)
         |> put_allocator allocator
     | _ ->
         let instruction = catchall register in
@@ -338,6 +349,7 @@ and generate
   match value with
   | QueryConjunction { namef; elements; arity } ->
       let (allocator :: allocators) = allocators in
+      let generator = { generator with in_query = true } in
       let generator, allocator, store =
         List.fold_left Argument.emit_query
           (generator, allocator, store)
@@ -353,8 +365,10 @@ and generate
       |> put_allocator allocator
       |> swap_allocators allocators (* TODO: deal with multiple queries *)
   | MultiDeclaration (decl, []) ->
+      let generator = { generator with in_query = false } in
       (generator, allocators, store) |> generate_single_declaration decl
   | MultiDeclaration (first, decls) ->
+      let generator = { generator with in_query = false } in
       let rec split_last (l : 'a list) : 'a list * 'a =
         match l with
         | [] -> failwith "impossible"

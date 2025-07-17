@@ -468,6 +468,13 @@ let execute (functor' : Ast.tag * int) (functor_table : Compiler.functor_map)
 let proceed ({ cp_register; _ } as computer) : Machine.t =
   { computer with p_register = cp_register }
 
+let query_variable register name ({ query_variables; _ } as computer) :
+    Machine.t =
+  let query_variables =
+    BatMap.add name (get_register register computer) query_variables
+  in
+  { computer with query_variables }
+
 let eval_step (functor_table : Compiler.functor_map)
     ({ store; p_register; fail; _ } as computer : Machine.t) : Machine.t * bool
     =
@@ -477,6 +484,12 @@ let eval_step (functor_table : Compiler.functor_map)
     match Store.code_get store p_register with
     | Instruction instruction -> (
         match instruction with
+        | QueryVariable (register, variable_name) ->
+            ( {
+                (query_variable register variable_name computer) with
+                p_register = p_register + 1;
+              },
+              false )
         | GetStructure ((name, arity), register) ->
             ( {
                 (get_structure (name, arity) register computer) with

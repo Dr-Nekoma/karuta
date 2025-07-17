@@ -1,7 +1,6 @@
 open Machine
 
-type ast = Functor of string * ast list
-[@@deriving show]
+type ast = Functor of string * ast list [@@deriving show]
 
 let rec inspect (store : Cell.t Store.t) (register : Cell.t) : string =
   match register with
@@ -22,7 +21,7 @@ let rec inspect (store : Cell.t Store.t) (register : Cell.t) : string =
       | Reference _ -> failwith "TODO: take care of free variables"
       | _ -> inspect store next)
   | Empty | Functor _ | ArgCount _ | Instruction _ | Address _ ->
-     failwith "unrechable inspect"
+      failwith "unreachable inspect"
 
 let rec to_ast (store : Cell.t Store.t) (register : Cell.t) : ast =
   match register with
@@ -36,8 +35,7 @@ let rec to_ast (store : Cell.t Store.t) (register : Cell.t) : ast =
               collect (i + 1) (to_ast store child :: acc)
           in
           Functor (name, collect 0 [])
-      | _ -> failwith "Expected Functor at structure address"
-    )
+      | _ -> failwith "Expected Functor at structure address")
   | Reference addr ->
       to_ast store (Store.get store (Evaluator.deref addr store))
   | _ -> failwith "Cannot convert non-structured term to AST"
@@ -50,12 +48,8 @@ let query_ast_args ({ x_registers; args; store; _ } : Machine.t) : ast list =
       let find_register idx = find idx x_registers in
       List.init how_many (fun i -> to_ast store (find_register i))
 
-let query_args ({ x_registers; args; store; _ } : Machine.t) : string =
-  match args with
-  | None -> ""
-  | Some how_many ->
-      let open Machine.IntMap in
-      let find_register idx = find idx x_registers in
-      let open Batteries in
-      let folder acc elem = acc ^ " | " ^ inspect store (find_register elem) in
-      List.fold_left folder "" (List.of_enum (0 --^ how_many))
+let query_args ({ store; query_variables; _ } : Machine.t) : string =
+  let folder acc (variable, cell) =
+    acc ^ variable ^ " = " ^ inspect store cell ^ "\n"
+  in
+  BatSeq.fold_left folder "" (BatMap.to_seq query_variables)
