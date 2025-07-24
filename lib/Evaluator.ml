@@ -468,6 +468,7 @@ let execute (functor' : Ast.tag * int) (functor_table : Compiler.functor_map)
 let proceed ({ cp_register; _ } as computer) : Machine.t =
   { computer with p_register = cp_register }
 
+(* TODO: make sure to unify things if we call this multiple times with the same name *)
 let query_variable register name ({ query_variables; _ } as computer) :
     Machine.t =
   let query_variables =
