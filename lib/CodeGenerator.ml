@@ -54,7 +54,8 @@ and add_instruction (instruction : Cell.instruction)
 
 module Argument = struct
   (* TODO: improve names *)
-  let rec emit_nested_argument (variable : Cell.register -> Cell.instruction)
+  let rec emit_argument_and_queue_nested_if_not_in_query
+      (variable : Cell.register -> Cell.instruction)
       (value : Cell.register -> Cell.instruction)
       (( ({ terms; variables; in_query; _ } as generator),
          ({ registers; _ } as allocator),
@@ -87,7 +88,7 @@ module Argument = struct
           allocator,
           store )
 
-  and emit_queue_nested_argument
+  and emit_single_queued_argument
       (( ({ variables; in_query; _ } as generator),
          ({ registers; _ } as allocator),
          store ) :
@@ -120,13 +121,20 @@ module Argument = struct
         |> put_allocator allocator
     | Functor { namef; arity; elements } ->
         let instruction = func ((namef, arity), register) in
+        let generator, allocator, store =
+          if in_query then
+            List.fold_left emit_single_queued_argument
+              (generator, allocator, store)
+              elements
+          else (generator, allocator, store)
+        in
         let generator, store = add_instruction instruction (generator, store) in
         List.fold_left
-          (emit_nested_argument variable value)
+          (emit_argument_and_queue_nested_if_not_in_query variable value)
           (generator, allocator, store)
           elements
 
-  and emit_queue_arguments
+  and emit_queued_arguments
       ((({ terms; _ } as generator), allocator, store) :
         t * RegisterAllocator.t * Cell.t Store.t) :
       t * RegisterAllocator.t * Cell.t Store.t =
@@ -134,9 +142,9 @@ module Argument = struct
     | None -> (generator, allocator, store)
     | Some (rest, elem) ->
         elem
-        |> emit_queue_nested_argument
+        |> emit_single_queued_argument
              ({ generator with terms = rest }, allocator, store)
-        |> emit_queue_arguments
+        |> emit_queued_arguments
 
   and emit
       (( ({ variables; in_query; _ } as generator),
@@ -171,34 +179,44 @@ module Argument = struct
             else Fun.id)
         |> put_allocator allocator
     | Functor { namef; arity; elements } ->
-        let generator, allocator, store =
-          if in_query then
-            emit_queue_arguments
-              ({ generator with terms = FT.of_list elements }, allocator, store)
-          else (generator, allocator, store)
-        in
         let instruction = func ((namef, arity), arg_register) in
-        let generator, store = add_instruction instruction (generator, store) in
-        let generator, allocator, store =
-          List.fold_left
-            (if in_query then
-               emit_nested_argument
+        if in_query then
+          let generator, allocator, store =
+            List.fold_left emit_single_queued_argument
+              (generator, allocator, store)
+              elements
+          in
+          let generator, store =
+            add_instruction instruction (generator, store)
+          in
+          let generator, allocator, store =
+            List.fold_left
+              (emit_argument_and_queue_nested_if_not_in_query
                  (fun v -> Cell.SetVariable v)
-                 (fun v -> Cell.SetValue v)
-             else
-               emit_nested_argument
+                 (fun v -> Cell.SetValue v))
+              (generator, allocator, store)
+              elements
+          in
+          (generator, allocator, store)
+        else
+          let generator, store =
+            add_instruction instruction (generator, store)
+          in
+          let generator, allocator, store =
+            List.fold_left
+              (emit_argument_and_queue_nested_if_not_in_query
                  (fun v -> Cell.UnifyVariable v)
                  (fun v -> Cell.UnifyValue v))
-            (generator, allocator, store)
-            elements
-        in
-        (generator, allocator, store)
+              (generator, allocator, store)
+              elements
+          in
+          (generator, allocator, store)
 
   let owl = Fun.compose Fun.compose Fun.compose
 
   let emit_functor_argument =
-    owl emit_queue_arguments
-    @@ emit_nested_argument
+    owl emit_queued_arguments
+    @@ emit_argument_and_queue_nested_if_not_in_query
          (fun v -> Cell.SetVariable v)
          (fun v -> Cell.SetValue v)
 end
@@ -304,7 +322,7 @@ and generate_single_declaration (decl : Ast.decl)
           (generator, allocator, store)
           (List.to_seq elements)
       in
-      let generator, allocator, store = Argument.emit_queue_arguments gas in
+      let generator, allocator, store = Argument.emit_queued_arguments gas in
       (generator, store)
       |> add_instruction Cell.Proceed
       |> put_allocator allocator |> swap_allocators allocators
