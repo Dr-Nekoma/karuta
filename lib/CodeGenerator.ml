@@ -46,7 +46,6 @@ and add_instruction (instruction : Cell.instruction)
   let real_instruction =
     match instruction with Cell.Call ("debug", 0) -> Cell.Debug | inst -> inst
   in
-  print_endline @@ Cell.show @@ Cell.Instruction real_instruction;
   let store =
     Store.code_put (Cell.Instruction real_instruction) p_register store
   in
@@ -157,8 +156,8 @@ module Argument = struct
     let arg_register = Cell.X index in
     let variable, value, func =
       if in_query then
-        ( (fun (_, v) -> Cell.SetVariable v),
-          (fun (_, v) -> Cell.SetValue v),
+        ( (fun v -> Cell.PutVariable v),
+          (fun v -> Cell.PutValue v),
           fun v -> Cell.PutStructure v )
       else
         ( (fun v -> Cell.GetVariable v),

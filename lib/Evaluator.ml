@@ -65,6 +65,7 @@ let rec deref (a : address) store : address =
   let cell = Store.get store a in
   match cell with
   | Reference value when value <> a -> deref value store
+  | Structure a -> a
   | _ -> a
 
 let is_reference (cell : Machine.Cell.t) : bool =
@@ -219,7 +220,12 @@ let put_variable (register : Cell.register) (a_register : Cell.register)
 
 let deref_cell (cell : Cell.t) store : Cell.t =
   match cell with
-  | Reference address -> Store.get store (deref address store)
+  | Reference address -> (
+      let derefed_address = deref address store in
+      let candidate = Store.get store derefed_address in
+      match candidate with
+      | Functor _ -> Structure derefed_address
+      | _ -> candidate)
   | Structure _ -> cell
   | _ -> failwith "unreachable deref_cell"
 
@@ -241,6 +247,7 @@ let put_value (register : Cell.register) (a_register : Cell.register) computer :
                bind address h_register
                  { computer with store; h_register = h_register + 1 })
           |> set_register a_register reference
+      | Functor _ -> failwith "we should never put a functor in a register"
       | _ -> set_register a_register value computer)
   | X _ -> set_register a_register value computer
 

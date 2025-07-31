@@ -15,8 +15,8 @@ let rec inspect (store : Cell.t Store.t) (register : Cell.t) : string =
           let middle = List.fold_left folder "" (List.of_enum (0 --^ arity)) in
           if arity = 0 then name else name ^ "[" ^ middle ^ "]"
       | _ -> failwith "Nonsense via structure")
-  | Reference address -> (
-      let next = Store.get store @@ Evaluator.deref address store in
+  | Reference _ -> (
+      let next = Evaluator.deref_cell register store in
       match next with
       | Reference _ -> failwith "TODO: take care of free variables"
       | _ -> inspect store next)
