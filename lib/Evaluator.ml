@@ -484,13 +484,18 @@ let query_variable register name ({ query_variables; _ } as computer) :
   { computer with query_variables }
 
 let eval_step (functor_table : Compiler.functor_map)
-    ({ store; p_register; fail; _ } as computer : Machine.t) : Machine.t * bool
-    =
+    ({ store; p_register; fail; trace; _ } as computer : Machine.t) :
+    Machine.t * bool =
   let open Machine.Cell in
   if fail then (backtrack computer, false)
   else
     match Store.code_get store p_register with
     | Instruction instruction -> (
+        if trace then
+          print_endline
+          @@ string_of_int computer.p_register
+          ^ ": "
+          ^ Machine.Cell.show_instruction instruction;
         match instruction with
         | QueryVariable (register, variable_name) ->
             ( {
