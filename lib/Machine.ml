@@ -20,7 +20,7 @@ module Cell = struct
     | TryMeElse of int
     | RetryMeElse of int
     | TrustMe
-    | Halt of int
+    | Halt
     | QueryVariable of (register * string)
     | Debug
   [@@deriving show]

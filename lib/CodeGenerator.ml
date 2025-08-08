@@ -337,7 +337,7 @@ and generate_declaration_and_patch (inst : int -> Cell.instruction)
       t * RegisterAllocator.t list * Cell.t Store.t) :
     t * RegisterAllocator.t list * Cell.t Store.t =
   let address_to_patch = generator.p_register in
-  (generator, store) |> add_instruction (Cell.Halt 0) (* Placeholder *)
+  (generator, store) |> add_instruction Cell.Halt (* Placeholder *)
   |> fun (generator, store) ->
   (generator, allocators, store) |> generate_single_declaration decl
   |> fun (({ p_register; _ } as generator), allocators, store) ->
@@ -363,7 +363,7 @@ and generate
       (generator, store)
       |> add_instruction instruction
       (* |> add_instruction Cell.Debug *)
-      |> add_instruction (Cell.Halt arity)
+      |> add_instruction Cell.Halt
       |> (fun (generator, store) ->
            ({ generator with variables = S.empty }, store))
       |> put_allocator allocator
