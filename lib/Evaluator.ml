@@ -90,34 +90,35 @@ let bind (a1 : address) (a2 : address) ({ store; _ } as computer : Machine.t) :
     { computer with store = store |> Store.put t2 a1 } |> trail a1
   else { computer with store = store |> Store.put t1 a2 } |> trail a2
 
+let deref_cell (cell : Cell.t) store : Cell.t =
+  match cell with
+  | Reference address -> (
+      let derefed_address = deref address store in
+      let candidate = Store.get store derefed_address in
+      match candidate with
+      | Functor _ -> Structure derefed_address
+      | _ -> candidate)
+  | Structure _ -> cell
+  | _ -> failwith "unreachable deref_cell"
+
 let get_structure ((functor_label, functor_arity) : string * int)
     (register : Cell.register) ({ store; h_register; _ } as computer) :
     Machine.t =
-  match get_register register computer with
-  | Reference address -> (
-      let addr = deref address store in
-      match Store.get store addr with
-      | Reference _ ->
-          let structure = Structure (h_register + 1) in
-          let func = Functor (functor_label, functor_arity) in
-          let computer =
-            {
-              computer with
-              store =
-                store
-                |> Store.heap_put structure h_register
-                |> Store.heap_put func (h_register + 1);
-            }
-            |> bind addr h_register
-          in
-          { computer with h_register = h_register + 2; mode = Write }
-      | Structure a -> (
-          match Store.heap_get store a with
-          | Functor (label, arity)
-            when label = functor_label && arity = functor_arity ->
-              { computer with s_register = a + 1; mode = Read }
-          | _ -> { computer with fail = true })
-      | _ -> { computer with fail = true })
+  match deref_cell (get_register register computer) store with
+  | Reference addr ->
+      let structure = Structure (h_register + 1) in
+      let func = Functor (functor_label, functor_arity) in
+      let computer =
+        {
+          computer with
+          store =
+            store
+            |> Store.heap_put structure h_register
+            |> Store.heap_put func (h_register + 1);
+        }
+        |> bind addr h_register
+      in
+      { computer with h_register = h_register + 2; mode = Write }
   | Structure a -> (
       match Store.heap_get store a with
       | Functor (label, arity)
@@ -217,17 +218,6 @@ let put_variable (register : Cell.register) (a_register : Cell.register)
       let reference = Reference addr in
       store |> Store.stack_put reference addr |> fun store ->
       set_register a_register reference { computer with store }
-
-let deref_cell (cell : Cell.t) store : Cell.t =
-  match cell with
-  | Reference address -> (
-      let derefed_address = deref address store in
-      let candidate = Store.get store derefed_address in
-      match candidate with
-      | Functor _ -> Structure derefed_address
-      | _ -> candidate)
-  | Structure _ -> cell
-  | _ -> failwith "unreachable deref_cell"
 
 let put_value (register : Cell.register) (a_register : Cell.register) computer :
     Machine.t =
