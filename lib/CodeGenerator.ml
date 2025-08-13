@@ -52,7 +52,6 @@ and add_instruction (instruction : Cell.instruction)
   ({ generator with p_register = p_register + 1 }, store)
 
 module Argument = struct
-  (* TODO: improve names *)
   let rec emit_argument_and_queue_nested_if_not_in_query
       (variable : Cell.register -> Cell.instruction)
       (value : Cell.register -> Cell.instruction)
@@ -220,7 +219,7 @@ module Argument = struct
          (fun v -> Cell.SetValue v)
 end
 
-let rec allocate_head ({ elements; _ } : Ast.func)
+let rec emit_head ({ elements; _ } : Ast.func)
     ((generator, ({ y_register; _ } as allocator), store) :
       t * RegisterAllocator.t * Cell.t Store.t) =
   let instruction = Cell.Allocate y_register in
@@ -229,12 +228,12 @@ let rec allocate_head ({ elements; _ } : Ast.func)
     (generator, allocator, store)
     (List.to_seq elements)
 
-and allocate_body (elements : Ast.func list) (generator, allocator, store) :
+and emit_body (elements : Ast.func list) (generator, allocator, store) :
     t * RegisterAllocator.t * Cell.t Store.t =
-  let allocate_clause (generator, allocator, store)
+  let emit_clause (generator, allocator, store)
       ({ namef; elements; arity } : Ast.func) :
       t * RegisterAllocator.t * Cell.t Store.t =
-    let allocate_argument
+    let emit_argument
         (( ( ({ variables; _ } as generator),
              ({ registers; _ } as allocator),
              store ),
@@ -271,15 +270,13 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
           ((generator, allocator, store), counter + 1)
     in
     let (generator, allocator, store), _ =
-      List.fold_left allocate_argument
-        ((generator, allocator, store), 0)
-        elements
+      List.fold_left emit_argument ((generator, allocator, store), 0) elements
     in
     let instruction = Cell.Call (namef, arity) in
     (generator, store) |> add_instruction instruction |> put_allocator allocator
   in
   let generator, allocator, store =
-    List.fold_left allocate_clause (generator, allocator, store) elements
+    List.fold_left emit_clause (generator, allocator, store) elements
   in
   (* TODO: We know the last instruction will be a Call because of the fold above *)
   (* TODO: Corner case being Debug instruction *)
@@ -328,7 +325,7 @@ and generate_single_declaration (decl : Ast.decl)
       |> reset_variables
   | { head; body } ->
       (generator, allocator, store)
-      |> allocate_head head |> allocate_body body |> swap_allocators allocators
+      |> emit_head head |> emit_body body |> swap_allocators allocators
       |> reset_variables
 
 and generate_declaration_and_patch (inst : int -> Cell.instruction)

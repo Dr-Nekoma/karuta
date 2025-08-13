@@ -136,7 +136,7 @@ let initialize () : t =
     mode = Mode.Read;
     fail = false;
     debug = false;
-    trace = true;
+    trace = false;
     args = None;
     query_variables = BatMap.empty;
   }
