@@ -14,8 +14,6 @@ multiply[succ[Prev], Y, Acc, Out] :-
   plus[Acc, Y, NewAcc],
   multiply[Prev, Y, NewAcc, Out].
 
-factorial[nil, succ[nil]].
-
 factorial[X, Out] :- factorial[X, succ[nil], Out].
 
 factorial[nil, Out, Out] :- nat[Out].
