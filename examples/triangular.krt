@@ -2,8 +2,7 @@ nat[nil].
 nat[succ[N]] :- nat[N].
 
 plus[Out, nil, Out] :- nat[Out].
-
-plus[succ[Prev], X, Out] :- nat[X], plus[Prev, succ[X], Out].
+plus[succ[Prev], X, Out] :- plus[Prev, succ[X], Out].
 plus[nil, Out, Out] :- nat[Out].
 
 triangle[N, Out] :- triangle[N, nil, Out].
