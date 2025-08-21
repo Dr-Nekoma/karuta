@@ -2,6 +2,7 @@
 %}
 
 %token <string> IDENT
+%token <string> INTEGER
 %token <string> UPPER_IDENT
 %token LEFT_DELIM
 %token RIGHT_DELIM
@@ -42,9 +43,11 @@ query:
 
 list_identifiers:
   | RIGHT_DELIM { [] }
-  | UPPER_IDENT COMMA list_identifiers { Ast.Variable {namev = $1} :: $3 }
-  | IDENT COMMA list_identifiers { Ast.Functor {namef = $1; elements = []; arity = 0} :: $3 }
-  | functor_elem = functorr; COMMA list_identifiers { (Ast.Functor functor_elem) :: $3 }
-  | IDENT RIGHT_DELIM { [Ast.Functor {namef = $1; elements = []; arity = 0}] }
-  | functor_elem = functorr; RIGHT_DELIM { [Ast.Functor functor_elem] }
-  | UPPER_IDENT RIGHT_DELIM { [Ast.Variable {namev = $1}] }
+  | expression COMMA list_identifiers { $1 :: $3 }
+  | expression RIGHT_DELIM { [$1] }
+
+expression:
+  | INTEGER { Ast.Integer (int_of_string $1) }
+  | UPPER_IDENT { Ast.Variable {namev = $1} }
+  | IDENT { Ast.Functor {namef = $1; elements = []; arity = 0} }
+  | functor_elem = functorr { Ast.Functor functor_elem }

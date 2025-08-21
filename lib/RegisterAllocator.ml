@@ -72,7 +72,8 @@ and allocate_loop : t -> term_queue -> t =
   | Some (rest, d) -> (
       match d with
       | Variable v -> allocate_variable v allocator rest
-      | Functor f -> allocate_functor f allocator rest)
+      | Functor f -> allocate_functor f allocator rest
+      | Integer _ -> allocate_loop allocator rest)
 
 and allocate_functor : Ast.func -> t -> term_queue -> t =
  fun ({ elements; _ } as func) allocator terms ->
@@ -89,6 +90,7 @@ and allocate_variable : Ast.var -> t -> term_queue -> t =
 
 and variables_of_term (elem : Ast.expr) : string S.t =
   match elem with
+  | Integer _ -> S.empty
   | Functor { elements; _ } ->
       List.fold_left
         (fun acc e -> S.union acc @@ variables_of_term e)

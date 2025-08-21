@@ -98,7 +98,7 @@ let deref_cell (cell : Cell.t) store : Cell.t =
       match candidate with
       | Functor _ -> Structure derefed_address
       | _ -> candidate)
-  | Structure _ -> cell
+  | Structure _ | Constant _ -> cell
   | _ -> failwith "unreachable deref_cell"
 
 let get_structure ((functor_label, functor_arity) : string * int)
@@ -472,6 +472,42 @@ let query_variable register name ({ query_variables; _ } as computer) :
   in
   { computer with query_variables }
 
+let put_constant (c : Cell.constant) (reg : Cell.register)
+    (computer : Machine.t) : Machine.t =
+  set_register reg (Cell.Constant c) computer
+
+let get_constant_from_dereferenced_cell (c : Cell.constant) (cell : Cell.t)
+    (computer : Machine.t) : Machine.t =
+  match cell with
+  | Constant c' -> { computer with fail = c <> c' }
+  | Reference addr ->
+      { computer with store = Store.put (Cell.Constant c) addr computer.store }
+      |> trail addr
+  | _ -> { computer with fail = true }
+
+let get_constant (c : Cell.constant) (reg : Cell.register)
+    (computer : Machine.t) : Machine.t =
+  get_constant_from_dereferenced_cell c
+    (deref_cell (get_register reg computer) computer.store)
+    computer
+
+let set_constant (c : Cell.constant)
+    ({ h_register; store; _ } as computer : Machine.t) : Machine.t =
+  {
+    computer with
+    store = Store.heap_put (Cell.Constant c) h_register store;
+    h_register = h_register + 1;
+  }
+
+let unify_constant (c : Cell.constant)
+    ({ mode; store; s_register; _ } as computer : Machine.t) : Machine.t =
+  match mode with
+  | Read ->
+      get_constant_from_dereferenced_cell c
+        (deref_cell (Store.get store s_register) store)
+        computer
+  | Write -> set_constant c computer
+
 let eval_step (functor_table : Compiler.functor_map)
     ({ store; p_register; fail; trace; _ } as computer : Machine.t) :
     Machine.t * bool =
@@ -553,6 +589,30 @@ let eval_step (functor_table : Compiler.functor_map)
         | UnifyValue register ->
             ( {
                 (unify_value register computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | SetConstant constant ->
+            ( {
+                (set_constant constant computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | GetConstant (constant, register) ->
+            ( {
+                (get_constant constant register computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | PutConstant (constant, register) ->
+            ( {
+                (put_constant constant register computer) with
+                p_register = p_register + 1;
+              },
+              false )
+        | UnifyConstant constant ->
+            ( {
+                (unify_constant constant computer) with
                 p_register = p_register + 1;
               },
               false )
