@@ -26,6 +26,7 @@ module Cell = struct
     | TrustMe
     | Halt
     | QueryVariable of (register * string)
+    | IsInteger of register
     | Debug
   [@@deriving show]
 

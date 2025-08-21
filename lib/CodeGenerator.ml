@@ -44,7 +44,10 @@ and add_instruction (instruction : Cell.instruction)
     t * Cell.t Store.t =
   (* TODO Add compiler builtins for better dev experience *)
   let real_instruction =
-    match instruction with Cell.Call ("debug", 0) -> Cell.Debug | inst -> inst
+    match instruction with
+    | Cell.Call ("debug", 0) -> Cell.Debug
+    | Cell.Call ("int", 1) -> Cell.IsInteger (Cell.X 0)
+    | inst -> inst
   in
   let store =
     Store.code_put (Cell.Instruction real_instruction) p_register store
@@ -282,6 +285,12 @@ and emit_body (elements : Ast.func list) (generator, allocator, store) :
         (individual_element : Ast.expr) :
         (t * RegisterAllocator.t * Cell.t Store.t) * int =
       match individual_element with
+      | Integer int ->
+          ( (generator, store)
+            |> add_instruction
+               @@ Cell.PutConstant (Cell.Integer int, Cell.X counter)
+            |> put_allocator allocator,
+            counter + 1 )
       | Variable _ as var ->
           let open RegisterAllocator.RegisterMap in
           let raw_register = find var registers in

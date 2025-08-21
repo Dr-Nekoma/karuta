@@ -162,6 +162,7 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
         match (Store.get store d1, Store.get store d2) with
         | Reference _, _ | _, Reference _ ->
             loop @@ bind d1 d2 { computer with store }
+        | Constant l, Constant r -> { computer with fail = l <> r }
         | Functor (s1, n1), Functor (s2, n2) ->
             let open Batteries in
             if s1 = s2 && n1 = n2 then
@@ -508,6 +509,14 @@ let unify_constant (c : Cell.constant)
         computer
   | Write -> set_constant c computer
 
+let is_integer (register : Cell.register) (computer : Machine.t) : Machine.t =
+  let cell = deref_cell (get_register register computer) computer.store in
+  {
+    computer with
+    fail =
+      (match cell with Cell.Constant (Cell.Integer _) -> false | _ -> true);
+  }
+
 let eval_step (functor_table : Compiler.functor_map)
     ({ store; p_register; fail; trace; _ } as computer : Machine.t) :
     Machine.t * bool =
@@ -574,6 +583,7 @@ let eval_step (functor_table : Compiler.functor_map)
               },
               false )
         | GetValue (x_register, a_register) -> (
+            (* TODO: make this work with non-addresses *)
             match
               ( get_register x_register computer,
                 get_register a_register computer )
@@ -626,6 +636,9 @@ let eval_step (functor_table : Compiler.functor_map)
         | TryMeElse l -> (try_me_else l computer, false)
         | RetryMeElse l -> (retry_me_else l computer, false)
         | TrustMe -> (trust_me computer, false)
+        | IsInteger register ->
+            ( { (is_integer register computer) with p_register = p_register + 1 },
+              false )
         | Debug ->
             ({ computer with debug = true; p_register = p_register + 1 }, false)
         )
