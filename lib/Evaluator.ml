@@ -82,13 +82,16 @@ let trail (a : address)
     }
   else computer
 
-let bind (a1 : address) (a2 : address) ({ store; _ } as computer : Machine.t) :
+let bind (t1 : Cell.t) (t2 : Cell.t) ({ store; _ } as computer : Machine.t) :
     Machine.t =
-  let t1 = match Store.get store a1 with Functor _ -> Structure a1 | v -> v in
-  let t2 = match Store.get store a2 with Functor _ -> Structure a2 | v -> v in
-  if is_reference t1 && ((not (is_reference t2)) || a2 < a1) then
-    { computer with store = store |> Store.put t2 a1 } |> trail a1
-  else { computer with store = store |> Store.put t1 a2 } |> trail a2
+  match (t1, t2) with
+  (* TODO: figure out how to deduplicate the first two clauses *)
+  | Reference a1, Reference a2 when a2 < a1 ->
+      { computer with store = store |> Store.put t2 a1 } |> trail a1
+  | Reference a1, _ ->
+      { computer with store = store |> Store.put t2 a1 } |> trail a1
+  | _, Reference a2 ->
+      { computer with store = store |> Store.put t1 a2 } |> trail a2
 
 let deref_cell (cell : Cell.t) store : Cell.t =
   match cell with
@@ -105,7 +108,7 @@ let get_structure ((functor_label, functor_arity) : string * int)
     (register : Cell.register) ({ store; h_register; _ } as computer) :
     Machine.t =
   match deref_cell (get_register register computer) store with
-  | Reference addr ->
+  | Reference _ as reference ->
       let structure = Structure (h_register + 1) in
       let func = Functor (functor_label, functor_arity) in
       let computer =
@@ -116,7 +119,7 @@ let get_structure ((functor_label, functor_arity) : string * int)
             |> Store.heap_put structure h_register
             |> Store.heap_put func (h_register + 1);
         }
-        |> bind addr h_register
+        |> bind reference (Reference h_register)
       in
       { computer with h_register = h_register + 2; mode = Write }
   | Structure a -> (
@@ -124,7 +127,13 @@ let get_structure ((functor_label, functor_arity) : string * int)
       | Functor (label, arity)
         when label = functor_label && arity = functor_arity ->
           { computer with s_register = a + 1; mode = Read }
-      | _ -> { computer with fail = true })
+      | Functor _ -> { computer with fail = true }
+      | value ->
+          failwith
+            ("corrupt memory: pointer is a structure pointer, but data isn't a \
+              functor\n\
+              data: " ^ Cell.show value))
+  | Constant _ -> { computer with fail = true }
   | _ -> failwith "unreachable get_structure"
 
 let unify_variable (register : Cell.register)
@@ -146,39 +155,43 @@ let unify_variable (register : Cell.register)
            })
       |> set_register register reference
 
-let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
+let unify (a1 : Cell.t) (a2 : Cell.t) ({ store; _ } as computer) : Machine.t =
   let preparedComputer =
-    store |> Store.pdl_push (Address a1) |> Store.pdl_push (Address a2)
-    |> fun store -> { computer with store; fail = false }
+    store |> Store.pdl_push a1 |> Store.pdl_push a2 |> fun store ->
+    { computer with store; fail = false }
   in
   let rec loop ({ store; fail; _ } as computer) : Machine.t =
     if Store.pdl_empty store || fail then computer
     else
-      let Address p1, store = Store.pdl_pop store in
-      let Address p2, store = Store.pdl_pop store in
-      let d1 = deref p1 store in
-      let d2 = deref p2 store in
+      let p1, store = Store.pdl_pop store in
+      let p2, store = Store.pdl_pop store in
+      let d1 = deref_cell p1 store in
+      let d2 = deref_cell p2 store in
       if d1 != d2 then
-        match (Store.get store d1, Store.get store d2) with
+        match (d1, d2) with
         | Reference _, _ | _, Reference _ ->
             loop @@ bind d1 d2 { computer with store }
         | Constant l, Constant r -> { computer with fail = l <> r }
-        | Functor (s1, n1), Functor (s2, n2) ->
-            let open Batteries in
-            if s1 = s2 && n1 = n2 then
-              loop
-                {
-                  computer with
-                  store =
-                    List.fold_left
-                      (fun store i ->
-                        store
-                        |> Store.pdl_push (Address (d1 + i))
-                        |> Store.pdl_push (Address (d2 + i)))
-                      store
-                      (List.of_enum (1 -- n1));
-                }
-            else { computer with fail = true }
+        | Structure a1, Structure a2 -> (
+            match (Store.get store a1, Store.get store a2) with
+            | Functor (s1, n1), Functor (s2, n2) ->
+                let open Batteries in
+                if s1 = s2 && n1 = n2 then
+                  loop
+                    {
+                      computer with
+                      store =
+                        List.fold_left
+                          (fun store i ->
+                            store
+                            |> Store.pdl_push (Reference (a1 + i))
+                            |> Store.pdl_push (Reference (a2 + i)))
+                          store
+                          (List.of_enum (1 -- n1));
+                    }
+                else { computer with fail = true }
+            | _ -> failwith "unreachable unify: Structure points at non-Functor"
+            )
         | _, _ -> { computer with fail = true }
       else loop computer
   in
@@ -187,11 +200,11 @@ let unify (a1 : address) (a2 : address) ({ store; _ } as computer) : Machine.t =
 let unify_value (register : Cell.register)
     ({ store; h_register; s_register; mode; _ } as computer) : Machine.t =
   match mode with
-  | Read -> (
-      match get_register register computer with
-      | Reference addr ->
-          { (unify addr s_register computer) with s_register = s_register + 1 }
-      | _ -> failwith "unreachable unify_value")
+  | Read ->
+      {
+        (unify (get_register register computer) (Reference s_register) computer) with
+        s_register = s_register + 1;
+      }
   | Write ->
       let value_of_register = get_register register computer in
       store |> Store.heap_put value_of_register h_register |> fun store ->
@@ -229,13 +242,13 @@ let put_value (register : Cell.register) (a_register : Cell.register) computer :
       match derefed_cell with
       | Reference address when address < computer.e_register ->
           set_register a_register (Store.get computer.store address) computer
-      | Reference address ->
+      | Reference _ ->
           let { h_register; store; _ } = computer in
           let reference = Reference h_register in
           store
           |> Store.heap_put reference h_register
           |> (fun store ->
-               bind address h_register
+               bind derefed_cell reference
                  { computer with store; h_register = h_register + 1 })
           |> set_register a_register reference
       | Functor _ -> failwith "we should never put a functor in a register"
@@ -582,20 +595,16 @@ let eval_step (functor_table : Compiler.functor_map)
                 p_register = p_register + 1;
               },
               false )
-        | GetValue (x_register, a_register) -> (
-            (* TODO: make this work with non-addresses *)
-            match
-              ( get_register x_register computer,
-                get_register a_register computer )
-            with
-            | ( (Reference x_addr | Structure x_addr),
-                (Reference a_addr | Structure a_addr) ) ->
-                ( {
-                    (get_value x_addr a_addr computer) with
-                    p_register = p_register + 1;
-                  },
-                  false )
-            | _ -> failwith "unreachable GetValue")
+        | GetValue (x_register, a_register) ->
+            ( {
+                (get_value
+                   (get_register x_register computer)
+                   (get_register a_register computer)
+                   computer)
+                with
+                p_register = p_register + 1;
+              },
+              false )
         | UnifyValue register ->
             ( {
                 (unify_value register computer) with
