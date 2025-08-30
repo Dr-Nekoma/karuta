@@ -329,19 +329,22 @@ and emit_body (elements : Ast.func list) (generator, allocator, store) :
   let generator, allocator, store =
     List.fold_left emit_clause (generator, allocator, store) elements
   in
-  (* TODO: We know the last instruction will be a Call because of the fold above *)
-  (* TODO: Corner case being Debug instruction *)
   let previous_p_register = generator.p_register - 1 in
-  let (Cell.Instruction (Cell.Call lastCallFunctor)) =
-    Store.code_get store previous_p_register
-  in
-  (generator, store)
-  |> add_instruction (Cell.Execute lastCallFunctor)
-  |> (fun (generator, store) ->
-       ( generator,
-         Store.code_put (Cell.Instruction Cell.Deallocate) previous_p_register
-           store ))
-  |> put_allocator allocator
+  match Store.code_get store previous_p_register with
+  | Cell.Instruction (Cell.Call lastCallFunctor) ->
+      (generator, store)
+      |> add_instruction (Cell.Execute lastCallFunctor)
+      |> (fun (generator, store) ->
+           ( generator,
+             Store.code_put (Cell.Instruction Cell.Deallocate)
+               previous_p_register store ))
+      |> put_allocator allocator
+  | Cell.Instruction (Cell.Builtin _) ->
+      (generator, store)
+      |> add_instruction Cell.Deallocate
+      |> add_instruction Cell.Proceed
+      |> put_allocator allocator
+  | _ -> failwith "something went very wrong when generating a tail call"
 
 and generate_functor
     ( ({ seen_registers; _ } as generator),

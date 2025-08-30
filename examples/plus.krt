@@ -1,4 +1,4 @@
-nat[0].
+nat[0] :- int[0].
 nat[succ[N]] :- nat[N].
 
 plus[Out, 0, Out] :- nat[Out].
