@@ -26,10 +26,10 @@ module Cell = struct
     | TrustMe
     | Halt
     | QueryVariable of (register * string)
-    | IsInteger of register
-    | Debug
+    | Builtin of builtin
   [@@deriving show]
 
+  and builtin = IsInteger of register | Debug [@@deriving show]
   and constant = Integer of int
 
   and t =

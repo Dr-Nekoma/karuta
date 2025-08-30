@@ -45,8 +45,8 @@ and add_instruction (instruction : Cell.instruction)
   (* TODO Add compiler builtins for better dev experience *)
   let real_instruction =
     match instruction with
-    | Cell.Call ("debug", 0) -> Cell.Debug
-    | Cell.Call ("int", 1) -> Cell.IsInteger (Cell.X 0)
+    | Cell.Call ("debug", 0) -> Cell.Builtin Cell.Debug
+    | Cell.Call ("int", 1) -> Cell.Builtin (Cell.IsInteger (Cell.X 0))
     | inst -> inst
   in
   let store =

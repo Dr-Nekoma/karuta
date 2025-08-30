@@ -645,12 +645,17 @@ let eval_step (functor_table : Compiler.functor_map)
         | TryMeElse l -> (try_me_else l computer, false)
         | RetryMeElse l -> (retry_me_else l computer, false)
         | TrustMe -> (trust_me computer, false)
-        | IsInteger register ->
-            ( { (is_integer register computer) with p_register = p_register + 1 },
-              false )
-        | Debug ->
-            ({ computer with debug = true; p_register = p_register + 1 }, false)
-        )
+        | Builtin builtin -> (
+            match builtin with
+            | IsInteger register ->
+                ( {
+                    (is_integer register computer) with
+                    p_register = p_register + 1;
+                  },
+                  false )
+            | Debug ->
+                ( { computer with debug = true; p_register = p_register + 1 },
+                  false )))
     | _ -> failwith "unreachable eval_step"
 
 let rec eval (functor_table : Compiler.functor_map) (computer : Machine.t) :
