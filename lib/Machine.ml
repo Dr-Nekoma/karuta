@@ -29,7 +29,16 @@ module Cell = struct
     | Builtin of builtin
   [@@deriving show]
 
-  and builtin = IsInteger of register | Debug [@@deriving show]
+  and builtin =
+    | IsInteger
+    | PlusInteger
+    | NegateInteger
+    | MultiplyInteger
+    | DivModInteger
+    | LessThanOrEqualInteger
+    | Debug
+  [@@deriving show]
+
   and constant = Integer of int
 
   and t =

@@ -238,8 +238,8 @@ let put_value (register : Cell.register) (a_register : Cell.register) computer :
   let value = get_register register computer in
   match register with
   | Y _ -> (
-      let derefed_cell = deref_cell value computer.store in
-      match derefed_cell with
+      let dereferenced_cell = deref_cell value computer.store in
+      match dereferenced_cell with
       | Reference address when address < computer.e_register ->
           set_register a_register (Store.get computer.store address) computer
       | Reference _ ->
@@ -248,7 +248,7 @@ let put_value (register : Cell.register) (a_register : Cell.register) computer :
           store
           |> Store.heap_put reference h_register
           |> (fun store ->
-               bind derefed_cell reference
+               bind dereferenced_cell reference
                  { computer with store; h_register = h_register + 1 })
           |> set_register a_register reference
       | Functor _ -> failwith "we should never put a functor in a register"
@@ -523,12 +523,141 @@ let unify_constant (c : Cell.constant)
   | Write -> set_constant c computer
 
 let is_integer (register : Cell.register) (computer : Machine.t) : Machine.t =
-  let cell = deref_cell (get_register register computer) computer.store in
+  let int = deref_cell (get_register register computer) computer.store in
   {
     computer with
     fail =
-      (match cell with Cell.Constant (Cell.Integer _) -> false | _ -> true);
+      (match int with Cell.Constant (Cell.Integer _) -> false | _ -> true);
   }
+
+let plus_integer
+    ((register0, register1, register2) :
+      Cell.register * Cell.register * Cell.register) (computer : Machine.t) :
+    Machine.t =
+  let addend0 = deref_cell (get_register register0 computer) computer.store in
+  let addend1 = deref_cell (get_register register1 computer) computer.store in
+  let sum = deref_cell (get_register register2 computer) computer.store in
+  match (addend0, addend1, sum) with
+  | ( Cell.Constant (Cell.Integer x0),
+      Cell.Constant (Cell.Integer x1),
+      Cell.Constant (Cell.Integer x2) )
+    when x0 + x1 = x2 ->
+      computer
+  | ( Cell.Constant (Cell.Integer x0),
+      Cell.Constant (Cell.Integer x1),
+      Cell.Reference _ ) ->
+      bind sum (Cell.Constant (Cell.Integer (x0 + x1))) computer
+  | ( Cell.Constant (Cell.Integer x0),
+      (Cell.Reference _ as cell),
+      Cell.Constant (Cell.Integer x1) )
+  | ( (Cell.Reference _ as cell),
+      Cell.Constant (Cell.Integer x0),
+      Cell.Constant (Cell.Integer x1) ) ->
+      bind cell (Cell.Constant (Cell.Integer (x1 - x0))) computer
+  | _ -> { computer with fail = true }
+
+let negate_integer ((register0, register1) : Cell.register * Cell.register)
+    (computer : Machine.t) : Machine.t =
+  let argument = deref_cell (get_register register0 computer) computer.store in
+  let inverse = deref_cell (get_register register1 computer) computer.store in
+  match (argument, inverse) with
+  | Cell.Constant (Cell.Integer x0), Cell.Constant (Cell.Integer x1)
+    when x0 = -x1 ->
+      computer
+  | Cell.Constant (Cell.Integer x0), (Cell.Reference _ as cell)
+  | (Cell.Reference _ as cell), Cell.Constant (Cell.Integer x0) ->
+      bind cell (Cell.Constant (Cell.Integer (-x0))) computer
+  | _ -> { computer with fail = true }
+
+let multiply_integer
+    ((register0, register1, register2) :
+      Cell.register * Cell.register * Cell.register) (computer : Machine.t) :
+    Machine.t =
+  let multiplicand =
+    deref_cell (get_register register0 computer) computer.store
+  in
+  let multiplier =
+    deref_cell (get_register register1 computer) computer.store
+  in
+  let product = deref_cell (get_register register2 computer) computer.store in
+  match (multiplicand, multiplier, product) with
+  | ( Cell.Constant (Cell.Integer x0),
+      Cell.Constant (Cell.Integer x1),
+      Cell.Constant (Cell.Integer x2) )
+    when x0 * x1 = x2 ->
+      computer
+  | ( Cell.Constant (Cell.Integer x0),
+      Cell.Constant (Cell.Integer x1),
+      Cell.Reference _ ) ->
+      bind product (Cell.Constant (Cell.Integer (x0 * x1))) computer
+  | ( Cell.Constant (Cell.Integer x0),
+      (Cell.Reference _ as cell),
+      Cell.Constant (Cell.Integer x1) )
+  | ( (Cell.Reference _ as cell),
+      Cell.Constant (Cell.Integer x0),
+      Cell.Constant (Cell.Integer x1) ) ->
+      if x0 = 0 && x1 <> 0 then { computer with fail = true }
+      else if Int.rem x1 x0 <> 0 then { computer with fail = true }
+      else bind cell (Cell.Constant (Cell.Integer (x1 / x0))) computer
+  | _ -> { computer with fail = true }
+
+let div_mod_integer
+    ((register0, register1, register2, register3) :
+      Cell.register * Cell.register * Cell.register * Cell.register)
+    (computer : Machine.t) : Machine.t =
+  let dividend = deref_cell (get_register register0 computer) computer.store in
+  let divisor = deref_cell (get_register register1 computer) computer.store in
+  let quotient = deref_cell (get_register register2 computer) computer.store in
+  let remainder = deref_cell (get_register register3 computer) computer.store in
+  match (dividend, divisor, quotient, remainder) with
+  | ( Cell.Constant (Cell.Integer x0),
+      Cell.Constant (Cell.Integer x1),
+      Cell.Constant (Cell.Integer x2),
+      Cell.Constant (Cell.Integer x3) )
+    when x0 / x1 = x2 && Int.rem x0 x1 = x3 ->
+      computer
+  | ( Cell.Constant (Cell.Integer x0),
+      Cell.Constant (Cell.Integer x1),
+      Cell.Reference _,
+      Cell.Reference _ ) ->
+      bind quotient (Cell.Constant (Cell.Integer (Int.div x0 x1))) computer
+      |> bind remainder (Cell.Constant (Cell.Integer (Int.rem x0 x1)))
+  | ( Cell.Constant (Cell.Integer x0),
+      Cell.Constant (Cell.Integer x1),
+      Cell.Constant (Cell.Integer x2),
+      Cell.Reference _ )
+    when Int.div x0 x1 = x2 ->
+      bind remainder (Cell.Constant (Cell.Integer (Int.rem x0 x1))) computer
+  | ( Cell.Constant (Cell.Integer x0),
+      Cell.Constant (Cell.Integer x1),
+      Cell.Reference _,
+      Cell.Constant (Cell.Integer x2) )
+    when Int.rem x0 x1 = x2 ->
+      bind remainder (Cell.Constant (Cell.Integer (Int.div x0 x1))) computer
+  | ( Cell.Constant (Cell.Integer x0),
+      Cell.Reference _,
+      Cell.Constant (Cell.Integer x1),
+      Cell.Constant (Cell.Integer x2) ) ->
+      bind remainder
+        (Cell.Constant (Cell.Integer (Int.div (x0 - x2) x1)))
+        computer
+  | ( Cell.Reference _,
+      Cell.Constant (Cell.Integer x0),
+      Cell.Constant (Cell.Integer x1),
+      Cell.Constant (Cell.Integer x2) ) ->
+      bind remainder (Cell.Constant (Cell.Integer ((x0 * x1) + x2))) computer
+  | _ -> { computer with fail = true }
+
+let less_than_or_equal_integer
+    ((register0, register1) : Cell.register * Cell.register)
+    (computer : Machine.t) : Machine.t =
+  let operand0 = deref_cell (get_register register0 computer) computer.store in
+  let operand1 = deref_cell (get_register register1 computer) computer.store in
+  match (operand0, operand1) with
+  | Cell.Constant (Cell.Integer x0), Cell.Constant (Cell.Integer x1)
+    when x0 <= x1 ->
+      computer
+  | _ -> { computer with fail = true }
 
 let eval_step (functor_table : Compiler.functor_map)
     ({ store; p_register; fail; trace; _ } as computer : Machine.t) :
@@ -647,9 +776,42 @@ let eval_step (functor_table : Compiler.functor_map)
         | TrustMe -> (trust_me computer, false)
         | Builtin builtin -> (
             match builtin with
-            | IsInteger register ->
+            | IsInteger ->
                 ( {
-                    (is_integer register computer) with
+                    (is_integer (Cell.X 0) computer) with
+                    p_register = p_register + 1;
+                  },
+                  false )
+            | PlusInteger ->
+                ( {
+                    (plus_integer (Cell.X 0, Cell.X 1, Cell.X 2) computer) with
+                    p_register = p_register + 1;
+                  },
+                  false )
+            | NegateInteger ->
+                ( {
+                    (negate_integer (Cell.X 0, Cell.X 1) computer) with
+                    p_register = p_register + 1;
+                  },
+                  false )
+            | MultiplyInteger ->
+                ( {
+                    (multiply_integer (Cell.X 0, Cell.X 1, Cell.X 2) computer) with
+                    p_register = p_register + 1;
+                  },
+                  false )
+            | DivModInteger ->
+                ( {
+                    (div_mod_integer
+                       (Cell.X 0, Cell.X 1, Cell.X 2, Cell.X 3)
+                       computer)
+                    with
+                    p_register = p_register + 1;
+                  },
+                  false )
+            | LessThanOrEqualInteger ->
+                ( {
+                    (less_than_or_equal_integer (Cell.X 0, Cell.X 1) computer) with
                     p_register = p_register + 1;
                   },
                   false )

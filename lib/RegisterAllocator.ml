@@ -138,7 +138,10 @@ and allocate_declaration : Ast.decl -> t =
     terms
 
 and allocate_query : Ast.func -> t =
- fun { elements; _ } -> allocate_loop initial_allocator (FT.of_list elements)
+ fun { elements; _ } ->
+  allocate_loop
+    { initial_allocator with x_register = List.length elements }
+    (FT.of_list elements)
 
 let allocate_toplevel : Ast.clause -> t list = function
   | MultiDeclaration (first, decls) ->
