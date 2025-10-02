@@ -15,6 +15,7 @@ might happen if you are crazy enough to use it.
 - [ ] PL List Literals  
 - [ ] PL Query Conjuction  
 - [ ] Comments
+- [ ] Namespacing
 - [ ] Special syntax for database support using ~@~
 - [ ] Dedicated bytecode for database interaction
 - [ ] Serialization for relational engine protocol
