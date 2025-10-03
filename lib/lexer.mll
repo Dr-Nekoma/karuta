@@ -30,8 +30,15 @@ rule read =
   | '.' { DOT }
   | '[' { LEFT_DELIM }
   | ']' { RIGHT_DELIM }
+  | '%' { skip_line lexbuf }
   | eof { EOF }
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
+
+and skip_line =
+  parse
+    | newline { new_line lexbuf; read lexbuf }
+    | eof { EOF }
+    | _ { skip_line lexbuf }
 
 and read_atom buf =
   parse
