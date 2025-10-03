@@ -1,8 +1,0 @@
-p[Z, h[Z, W], f[W]]?
-
-q[H, J].
-r[K, L].
-
-p[A, B, C] :-
-    q[A, 'an atom with spaces'],
-    r[B, C].

@@ -1,8 +1,8 @@
-module RegisterMap = BatMap.Make (Ast)
+module RegisterMap = BatMap.Make (Ast.Expr)
 module VariableMap = BatMap.Make (String)
 module FT = BatFingerTree
 
-type term_queue = Ast.t FT.t
+type term_queue = Ast.Expr.t FT.t
 
 module S = BatSet
 
@@ -22,7 +22,7 @@ let show_registers (registers : register RegisterMap.t) : string =
   let open RegisterMap in
   BatSeq.fold_left
     (fun acc (term, register) ->
-      acc ^ "\n" ^ Ast.show term ^ " = " ^ show_register register)
+      acc ^ "\n" ^ Ast.show_expr term ^ " = " ^ show_register register)
     "" (to_seq registers)
 [@@warning "-32"]
 
@@ -52,7 +52,7 @@ let initial_allocator : t =
 
 let rec allocate
     ({ registers; permanent_variables; x_register; y_register; _ } as allocator)
-    (elem : Ast.t) : t =
+    (elem : Ast.expr) : t =
   let register, x_register, y_register =
     match elem with
     | Variable { namev } -> (
@@ -71,10 +71,9 @@ and allocate_loop : t -> term_queue -> t =
   | None -> allocator
   | Some (rest, d) -> (
       match d with
-      | Declaration _ -> failwith "unreachable register_alloc_loop"
       | Variable v -> allocate_variable v allocator rest
-      | Query _ -> failwith "there's no such thing as a nested query"
-      | Functor f -> allocate_functor f allocator rest)
+      | Functor f -> allocate_functor f allocator rest
+      | Integer _ -> allocate_loop allocator rest)
 
 and allocate_functor : Ast.func -> t -> term_queue -> t =
  fun ({ elements; _ } as func) allocator terms ->
@@ -89,19 +88,22 @@ and allocate_variable : Ast.var -> t -> term_queue -> t =
     | None -> allocate_loop (allocate allocator (Ast.Variable var)) terms
     | Some _ -> allocate_loop allocator terms
 
-and variables_of_term (elem : Ast.t) : string S.t =
+and variables_of_term (elem : Ast.expr) : string S.t =
   match elem with
-  | Declaration _ | Query _ -> failwith "unreachable extract_variables"
+  | Integer _ -> S.empty
   | Functor { elements; _ } ->
       List.fold_left
         (fun acc e -> S.union acc @@ variables_of_term e)
         S.empty elements
   | Variable { namev } -> S.add namev S.empty
 
-and allocate_declaration : Ast.func -> Ast.func list -> t =
- fun ({ elements; _ } as head) body ->
+and not_debug ({ namef; arity; _ } : Ast.func) : bool =
+  not (namef = "debug" && arity = 0)
+
+and allocate_declaration : Ast.decl -> t =
+ fun { head = { elements; _ } as head; body } ->
   let first_clause, other_clauses =
-    match body with
+    match List.filter not_debug body with
     | [] -> ([], [])
     | first_clause :: other_clauses ->
         ([ Ast.Functor first_clause ], other_clauses)
@@ -136,9 +138,12 @@ and allocate_declaration : Ast.func -> Ast.func list -> t =
     terms
 
 and allocate_query : Ast.func -> t =
- fun { elements; _ } -> allocate_loop initial_allocator (FT.of_list elements)
+ fun { elements; _ } ->
+  allocate_loop
+    { initial_allocator with x_register = List.length elements }
+    (FT.of_list elements)
 
-let allocate_toplevel : Ast.t -> t = function
-  | Variable _ | Functor _ -> failwith "not top level forms"
-  | Declaration { head; body } -> allocate_declaration head body
-  | Query func -> allocate_query func
+let allocate_toplevel : Ast.clause -> t list = function
+  | MultiDeclaration (first, decls) ->
+      allocate_declaration first :: List.map allocate_declaration decls
+  | QueryConjunction func -> [ allocate_query func ]

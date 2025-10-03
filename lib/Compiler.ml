@@ -8,6 +8,19 @@ end)
 
 type functor_map = int FunctorMap.t
 
+let show_functor_table (functors : functor_map) : string =
+  let open FunctorMap in
+  BatSeq.fold_left
+    (fun acc ((label, arity), address) ->
+      acc ^ label ^ "/" ^ string_of_int arity ^ ":" ^ string_of_int address
+      ^ "\n")
+    "" (to_seq functors)
+
+let show_query_variables (variables : Machine.query_map) : string =
+  BatSeq.fold_left
+    (fun acc (name, cell) -> acc ^ name ^ " = " ^ Machine.Cell.show cell ^ "\n")
+    "" (BatMap.to_seq variables)
+
 type t = {
   entry_point : entry_point option;
   p_register : int;
@@ -17,25 +30,23 @@ type t = {
 let initialize () : t =
   { entry_point = None; p_register = 0; functor_table = FunctorMap.empty }
 
-let rec allocate_registers (elem : Ast.t) : RegisterAllocator.t =
+let rec allocate_registers (elem : Ast.clause) : RegisterAllocator.t list =
   match elem with
-  | Variable _ | Functor _ -> failwith "not top level forms"
-  | (Declaration _ | Query _) as form ->
+  | (MultiDeclaration _ | QueryConjunction _) as form ->
       RegisterAllocator.allocate_toplevel form
 
 and compile :
-    Ast.t list * t * Machine.Cell.t Machine.Store.t ->
+    Ast.clause list * t * Machine.Cell.t Machine.Store.t ->
     t * Machine.Cell.t Machine.Store.t = function
   | [], compiler, store -> (compiler, store)
   | d :: ds, ({ entry_point; p_register; functor_table } as compiler), store
     -> (
       match d with
-      | Variable _ | Functor _ -> failwith "unreachable compile"
-      | Declaration { head; _ } as form ->
+      | MultiDeclaration ({ head; _ }, _) as form ->
           let open FunctorMap in
-          ( allocate_registers form |> fun allocator ->
+          ( allocate_registers form |> fun allocators ->
             CodeGenerator.generate
-              (CodeGenerator.initialize p_register, allocator, store)
+              (CodeGenerator.initialize p_register, allocators, store)
               form )
           |> fun (code_generator, _, store) ->
           compile
@@ -47,7 +58,7 @@ and compile :
                   add (head.namef, head.arity) p_register functor_table;
               },
               store )
-      | Query _ as form ->
+      | QueryConjunction _ as form ->
           let entry_point =
             match entry_point with
             | None -> Some { p_register }

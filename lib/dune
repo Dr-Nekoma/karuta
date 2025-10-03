@@ -11,26 +11,28 @@
 (library
  (name lib)
  (modules
+  Print
   Ast
   CodeGenerator
   Store
   Machine
   RegisterAllocator
   Compiler
+  Debugger
   Evaluator
   Parse
   Parser
+  Preprocessor
   Lexer)
  (libraries batteries)
  (package karuta)
  (preprocess
-  (pps ppx_deriving.show ppx_deriving.std ppx_deriving.ord)))
+  (pps ppx_deriving.show ppx_deriving.std ppx_deriving.ord ppx_enumerate)))
 
 (ocamllex lexer)
 
 (menhir
- (modules parser)
- (flags --trace))
+ (modules parser))
 
 (documentation
  (package karuta))

@@ -12,17 +12,23 @@ open Machine
 type t = {
   p_register : int;
   terms : RegisterAllocator.term_queue;
-  variables : RegisterAllocator.variable_set;
-  scope_registers : register_set;
+  seen_registers : RegisterAllocator.register S.t;
+  in_query : bool;
 }
 
 let initialize (begin_addr : int) : t =
   {
     p_register = begin_addr;
     terms = FT.empty;
-    variables = S.empty;
-    scope_registers = S.empty;
+    seen_registers = S.empty;
+    in_query = false;
   }
+
+let reset
+    (({ p_register; _ }, allocators, store) :
+      t * RegisterAllocator.t list * Cell.t Store.t) :
+    t * RegisterAllocator.t list * Cell.t Store.t =
+  (initialize p_register, allocators, store)
 
 let put_allocator (allocator : RegisterAllocator.t)
     ((generator, store) : t * Cell.t Store.t) :
@@ -36,60 +42,129 @@ let cell_register : RegisterAllocator.register -> Cell.register = function
 and add_instruction (instruction : Cell.instruction)
     ((({ p_register; _ } as generator), store) : t * Cell.t Store.t) :
     t * Cell.t Store.t =
-  let store = Store.code_put (Cell.Instruction instruction) p_register store in
+  (* TODO Add compiler builtins for better dev experience *)
+  let real_instruction =
+    match instruction with
+    | Cell.Call ("debug", 0) -> Cell.Builtin Cell.Debug
+    | Cell.Call ("int", 1) -> Cell.Builtin Cell.IsInteger
+    | Cell.Call ("plus", 3) -> Cell.Builtin Cell.PlusInteger
+    | Cell.Call ("neg", 2) -> Cell.Builtin Cell.NegateInteger
+    | Cell.Call ("multiply", 3) -> Cell.Builtin Cell.MultiplyInteger
+    | Cell.Call ("div-mod", 4) -> Cell.Builtin Cell.DivModInteger
+    | Cell.Call ("leq", 2) -> Cell.Builtin Cell.LessThanOrEqualInteger
+    | inst -> inst
+  in
+  let store =
+    Store.code_put (Cell.Instruction real_instruction) p_register store
+  in
   ({ generator with p_register = p_register + 1 }, store)
 
-module type Fact = sig
-  val emit_argument :
-    t * RegisterAllocator.t * Cell.t Store.t ->
-    int ->
-    Ast.t ->
-    t * RegisterAllocator.t * Cell.t Store.t
-
-  val emit_queue_arguments :
-    t * RegisterAllocator.t * Cell.t Store.t ->
-    t * RegisterAllocator.t * Cell.t Store.t
-end
-
-module Fact : Fact = struct
-  let rec emit_nested_argument
-      (( ({ terms; variables; _ } as generator),
+module Argument = struct
+  let rec emit_argument_and_queue_nested_if_not_in_query
+      (variable : Cell.register -> Cell.instruction)
+      (value : Cell.register -> Cell.instruction)
+      (const : Cell.constant -> Cell.instruction)
+      (( ({ terms; seen_registers; in_query; _ } as generator),
          ({ registers; _ } as allocator),
          store ) :
-        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.t) :
+        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.expr) :
       t * RegisterAllocator.t * Cell.t Store.t =
     let open RegisterAllocator.RegisterMap in
-    let register = cell_register @@ find elem registers in
-    let instruction = Cell.UnifyVariable register in
-    let generator, store = add_instruction instruction (generator, store) in
+    let raw_register = lazy (find elem registers) in
+    let register = lazy (cell_register (Lazy.force raw_register)) in
+    let new_seen_and_inst =
+      lazy
+        (let raw_register = Lazy.force raw_register in
+         let register = Lazy.force register in
+         match S.find_opt raw_register seen_registers with
+         | None -> (S.add raw_register seen_registers, variable register)
+         | Some _ -> (seen_registers, value register))
+    in
     match elem with
-    | Variable { namev } ->
-        ({ generator with variables = S.add namev variables }, allocator, store)
-    | Functor _ as f ->
-        ({ generator with terms = FT.cons terms f }, allocator, store)
-    | _ -> failwith "unreachable emit_nested_fact_argument"
-
-  and emit_queue_nested_argument
-      ((generator, ({ registers; _ } as allocator), store) :
-        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.t) :
-      t * RegisterAllocator.t * Cell.t Store.t =
-    let open RegisterAllocator.RegisterMap in
-    let register = cell_register @@ find elem registers in
-    match elem with
-    | Variable _ ->
-        let instruction = Cell.UnifyVariable register in
+    | Integer int ->
         (generator, store)
+        |> add_instruction @@ const @@ Cell.Integer int
+        |> put_allocator allocator
+    | Variable { namev } ->
+        let seen_registers, instruction = Lazy.force new_seen_and_inst in
+        ({ generator with seen_registers }, store)
         |> add_instruction instruction
+        |> (if in_query then
+              add_instruction (Cell.QueryVariable (Lazy.force register, namev))
+            else Fun.id)
+        |> put_allocator allocator
+    | Functor _ as f ->
+        let seen_registers, instruction = Lazy.force new_seen_and_inst in
+        let generator, store = add_instruction instruction (generator, store) in
+        ( {
+            generator with
+            terms = (if in_query then terms else FT.cons terms f);
+            seen_registers;
+          },
+          allocator,
+          store )
+
+  and emit_single_queued_argument
+      (( ({ seen_registers; in_query; _ } as generator),
+         ({ registers; _ } as allocator),
+         store ) :
+        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.expr) :
+      t * RegisterAllocator.t * Cell.t Store.t =
+    let open RegisterAllocator.RegisterMap in
+    let raw_register = lazy (find elem registers) in
+    let register = lazy (cell_register @@ Lazy.force raw_register) in
+    let variable, value, func, const =
+      if in_query then
+        ( (fun v -> Cell.SetVariable v),
+          (fun v -> Cell.SetValue v),
+          (fun v -> Cell.PutStructure v),
+          fun v -> Cell.SetConstant v )
+      else
+        ( (fun v -> Cell.UnifyVariable v),
+          (fun v -> Cell.UnifyValue v),
+          (fun v -> Cell.GetStructure v),
+          fun v -> Cell.UnifyConstant v )
+    in
+    match elem with
+    | Integer int ->
+        (generator, store)
+        |> add_instruction @@ const @@ Cell.Integer int
+        |> put_allocator allocator
+    | Variable { namev } ->
+        let raw_register = Lazy.force raw_register in
+        let register = Lazy.force register in
+        let seen_registers, instruction =
+          match S.find_opt raw_register seen_registers with
+          | None -> (S.add raw_register seen_registers, variable register)
+          | Some _ -> (seen_registers, value register)
+        in
+        ({ generator with seen_registers }, store)
+        |> add_instruction instruction
+        |> (if in_query then
+              add_instruction (Cell.QueryVariable (register, namev))
+            else Fun.id)
         |> put_allocator allocator
     | Functor { namef; arity; elements } ->
-        let instruction = Cell.GetStructure ((namef, arity), register) in
+        let raw_register = Lazy.force raw_register in
+        let register = Lazy.force register in
+        let instruction = func ((namef, arity), register) in
+        let generator =
+          { generator with seen_registers = S.add raw_register seen_registers }
+        in
+        let generator, allocator, store =
+          if in_query then
+            List.fold_left emit_single_queued_argument
+              (generator, allocator, store)
+              elements
+          else (generator, allocator, store)
+        in
         let generator, store = add_instruction instruction (generator, store) in
-        List.fold_left emit_nested_argument
+        List.fold_left
+          (emit_argument_and_queue_nested_if_not_in_query variable value const)
           (generator, allocator, store)
           elements
-    | _ -> failwith "unreachable emit_queue_nested_fact_argument"
 
-  and emit_queue_arguments
+  and emit_queued_arguments
       ((({ terms; _ } as generator), allocator, store) :
         t * RegisterAllocator.t * Cell.t Store.t) :
       t * RegisterAllocator.t * Cell.t Store.t =
@@ -97,160 +172,151 @@ module Fact : Fact = struct
     | None -> (generator, allocator, store)
     | Some (rest, elem) ->
         elem
-        |> emit_queue_nested_argument
+        |> emit_single_queued_argument
              ({ generator with terms = rest }, allocator, store)
-        |> emit_queue_arguments
+        |> emit_queued_arguments
 
-  and emit_argument
-      ((({ variables; _ } as generator), ({ registers; _ } as allocator), store) :
-        t * RegisterAllocator.t * Cell.t Store.t) (index : int) (elem : Ast.t) :
-      t * RegisterAllocator.t * Cell.t Store.t =
+  and emit
+      (( ({ seen_registers; in_query; _ } as generator),
+         ({ registers; _ } as allocator),
+         store ) :
+        t * RegisterAllocator.t * Cell.t Store.t) (index : int)
+      (elem : Ast.expr) : t * RegisterAllocator.t * Cell.t Store.t =
     let open RegisterAllocator.RegisterMap in
-    let register = cell_register @@ find elem registers in
+    let raw_register = lazy (find elem registers) in
+    let register = lazy (cell_register (Lazy.force raw_register)) in
     let arg_register = Cell.X index in
+    let variable, value, func, const =
+      if in_query then
+        ( (fun v -> Cell.PutVariable v),
+          (fun v -> Cell.PutValue v),
+          (fun v -> Cell.PutStructure v),
+          fun v -> Cell.PutConstant v )
+      else
+        ( (fun v -> Cell.GetVariable v),
+          (fun v -> Cell.GetValue v),
+          (fun v -> Cell.GetStructure v),
+          fun v -> Cell.GetConstant v )
+    in
     match elem with
+    | Integer int ->
+        (generator, store)
+        |> add_instruction (const (Cell.Integer int, arg_register))
+        |> put_allocator allocator
     | Variable { namev } ->
-        let variables, instruction =
-          match S.find_opt namev variables with
-          | None -> (S.add namev variables, Cell.UnifyVariable arg_register)
-          | Some _ -> (variables, Cell.GetValue (register, arg_register))
+        let raw_register = Lazy.force raw_register in
+        let register = Lazy.force register in
+        let seen_registers, instruction =
+          match S.find_opt raw_register seen_registers with
+          | None ->
+              ( S.add raw_register seen_registers,
+                variable (register, arg_register) )
+          | Some _ -> (seen_registers, value (register, arg_register))
         in
-        ({ generator with variables }, store)
+        ({ generator with seen_registers }, store)
         |> add_instruction instruction
+        |> (if in_query then
+              add_instruction (Cell.QueryVariable (arg_register, namev))
+            else Fun.id)
         |> put_allocator allocator
     | Functor { namef; arity; elements } ->
-        let instruction = Cell.GetStructure ((namef, arity), arg_register) in
-        let generator, store = add_instruction instruction (generator, store) in
-        List.fold_left emit_nested_argument
-          (generator, allocator, store)
-          elements
-    | _ -> failwith "unreachable emit_fact_argument"
-end
-
-module type Argument = sig
-  val emit_query :
-    t * RegisterAllocator.t * Cell.t Store.t ->
-    Ast.t ->
-    t * RegisterAllocator.t * Cell.t Store.t
-
-  val emit_functor :
-    t * RegisterAllocator.t * Cell.t Store.t ->
-    Ast.t ->
-    t * RegisterAllocator.t * Cell.t Store.t
-end
-
-module Argument : Argument = struct
-  let rec emit_argument
-      ((variable, value, catchall) :
-        (Cell.register -> Cell.instruction)
-        * (Cell.register -> Cell.instruction)
-        * (Cell.register -> Cell.instruction))
-      ((({ variables; _ } as generator), ({ registers; _ } as allocator), store) :
-        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.t) :
-      t * RegisterAllocator.t * Cell.t Store.t =
-    let open RegisterAllocator.RegisterMap in
-    let register = cell_register @@ find elem registers in
-    match elem with
-    | Variable { namev } ->
-        let variables, instruction =
-          match S.find_opt namev variables with
-          | None -> (S.add namev variables, variable register)
-          | Some _ -> (variables, value register)
+        let raw_register = Lazy.force raw_register in
+        let instruction = func ((namef, arity), arg_register) in
+        let generator =
+          { generator with seen_registers = S.add raw_register seen_registers }
         in
-        ({ generator with variables }, store)
-        |> add_instruction instruction
-        |> put_allocator allocator
-    | _ ->
-        let instruction = catchall register in
-        (generator, store)
-        |> add_instruction instruction
-        |> put_allocator allocator
+        if in_query then
+          let generator, allocator, store =
+            List.fold_left emit_single_queued_argument
+              (generator, allocator, store)
+              elements
+          in
+          let generator, store =
+            add_instruction instruction (generator, store)
+          in
+          let generator, allocator, store =
+            List.fold_left
+              (emit_argument_and_queue_nested_if_not_in_query
+                 (fun v -> Cell.SetVariable v)
+                 (fun v -> Cell.SetValue v)
+                 (fun v -> Cell.SetConstant v))
+              (generator, allocator, store)
+              elements
+          in
+          (generator, allocator, store)
+        else
+          let generator, store =
+            add_instruction instruction (generator, store)
+          in
+          List.fold_left
+            (emit_argument_and_queue_nested_if_not_in_query
+               (fun v -> Cell.UnifyVariable v)
+               (fun v -> Cell.UnifyValue v)
+               (fun v -> Cell.UnifyConstant v))
+            (generator, allocator, store)
+            elements
+          |> emit_queued_arguments
 
-  and emit_query
-      ((generator, ({ registers; _ } as allocator), store) :
-        t * RegisterAllocator.t * Cell.t Store.t) (elem : Ast.t) :
-      t * RegisterAllocator.t * Cell.t Store.t =
-    let emit_toplevel_query_argument =
-      emit_argument
-        ( (fun v -> Cell.SetVariable v),
-          (fun v -> Cell.SetValue v),
-          fun v -> Cell.SetValue v )
-    in
-    let open RegisterAllocator.RegisterMap in
-    let register = cell_register @@ find elem registers in
-    match elem with
-    | Functor { namef; elements; arity } ->
-        let instruction = Cell.PutStructure ((namef, arity), register) in
-        let generator, store = add_instruction instruction (generator, store) in
-        List.fold_left emit_query (generator, allocator, store) elements
-    | _ -> emit_toplevel_query_argument (generator, allocator, store) elem
+  let owl = Fun.compose Fun.compose Fun.compose
 
-  let emit_functor =
-    emit_argument
-      ( (fun v -> Cell.UnifyVariable v),
-        (fun v -> Cell.UnifyValue v),
-        fun v -> Cell.UnifyVariable v )
+  let emit_functor_argument =
+    owl emit_queued_arguments
+    @@ emit_argument_and_queue_nested_if_not_in_query
+         (fun v -> Cell.SetVariable v)
+         (fun v -> Cell.SetValue v)
+         (fun v -> Cell.SetConstant v)
 end
 
-let rec allocate_head ({ elements; _ } : Ast.func)
+let rec emit_head ({ elements; _ } : Ast.func)
     ((generator, ({ y_register; _ } as allocator), store) :
       t * RegisterAllocator.t * Cell.t Store.t) =
-  let head_folder
-      (( ( ({ scope_registers; _ } as generator),
-           ({ registers; _ } as allocator),
-           store ),
-         counter ) :
-        (t * RegisterAllocator.t * Cell.t Store.t) * int) element :
-      (t * RegisterAllocator.t * Cell.t Store.t) * int =
-    let open RegisterAllocator.RegisterMap in
-    let raw_register = find element registers in
-    let register = cell_register raw_register in
-    let scope_registers = S.add raw_register scope_registers in
-    let instruction = Cell.GetVariable (register, Cell.X counter) in
-    let generator, store =
-      add_instruction instruction ({ generator with scope_registers }, store)
-    in
-    ((generator, allocator, store), counter + 1)
-  in
   let instruction = Cell.Allocate y_register in
   let generator, store = add_instruction instruction (generator, store) in
-  List.fold_left head_folder ((generator, allocator, store), 0) elements |> fst
+  Seq.fold_lefti Argument.emit
+    (generator, allocator, store)
+    (List.to_seq elements)
 
-and allocate_body (elements : Ast.func list) (generator, allocator, store) :
+and emit_body (elements : Ast.func list) (generator, allocator, store) :
     t * RegisterAllocator.t * Cell.t Store.t =
-  let allocate_clause (generator, allocator, store)
+  let emit_clause (generator, allocator, store)
       ({ namef; elements; arity } : Ast.func) :
       t * RegisterAllocator.t * Cell.t Store.t =
-    let allocate_argument
-        (( ( ({ scope_registers; _ } as generator),
+    let emit_argument
+        (( ( ({ seen_registers; _ } as generator),
              ({ registers; _ } as allocator),
              store ),
            counter ) :
           (t * RegisterAllocator.t * Cell.t Store.t) * int)
-        (individual_element : Ast.t) :
+        (individual_element : Ast.expr) :
         (t * RegisterAllocator.t * Cell.t Store.t) * int =
       match individual_element with
+      | Integer int ->
+          ( (generator, store)
+            |> add_instruction
+               @@ Cell.PutConstant (Cell.Integer int, Cell.X counter)
+            |> put_allocator allocator,
+            counter + 1 )
       | Variable _ as var ->
           let open RegisterAllocator.RegisterMap in
           let raw_register = find var registers in
           let left_register = cell_register raw_register in
-          let scope_registers, instruction =
-            match S.find_opt raw_register scope_registers with
+          let seen_registers, instruction =
+            match S.find_opt raw_register seen_registers with
             | None ->
-                ( S.add raw_register scope_registers,
+                ( S.add raw_register seen_registers,
                   Cell.PutVariable (left_register, Cell.X counter) )
             | Some _ ->
-                (scope_registers, Cell.PutValue (left_register, Cell.X counter))
+                (seen_registers, Cell.PutValue (left_register, Cell.X counter))
           in
           let generator, store =
             add_instruction instruction
-              ({ generator with scope_registers }, store)
+              ({ generator with seen_registers }, store)
           in
           ((generator, allocator, store), counter + 1)
       | Functor func as f ->
           let open RegisterAllocator.RegisterMap in
           let (generator, allocator, store), _ =
-            (generate (generator, allocator, store) (Ast.Query func), counter)
+            (generate_functor (generator, allocator, store) func, counter)
           in
           let left_register = cell_register @@ find f registers in
           let instruction = Cell.PutValue (left_register, Cell.X counter) in
@@ -258,63 +324,129 @@ and allocate_body (elements : Ast.func list) (generator, allocator, store) :
             add_instruction instruction (generator, store)
           in
           ((generator, allocator, store), counter + 1)
-      | _ -> failwith "unreachable allocate_body"
     in
     let (generator, allocator, store), _ =
-      List.fold_left allocate_argument
-        ((generator, allocator, store), 0)
-        elements
+      List.fold_left emit_argument ((generator, allocator, store), 0) elements
     in
     let instruction = Cell.Call (namef, arity) in
     (generator, store) |> add_instruction instruction |> put_allocator allocator
   in
   let generator, allocator, store =
-    List.fold_left allocate_clause (generator, allocator, store) elements
+    List.fold_left emit_clause (generator, allocator, store) elements
   in
-  (generator, store)
-  |> add_instruction Cell.Deallocate
-  |> put_allocator allocator
+  let previous_p_register = generator.p_register - 1 in
+  match Store.code_get store previous_p_register with
+  | Cell.Instruction (Cell.Call lastCallFunctor) ->
+      (generator, store)
+      |> add_instruction (Cell.Execute lastCallFunctor)
+      |> (fun (generator, store) ->
+           ( generator,
+             Store.code_put (Cell.Instruction Cell.Deallocate)
+               previous_p_register store ))
+      |> put_allocator allocator
+  | Cell.Instruction (Cell.Builtin _) ->
+      (generator, store)
+      |> add_instruction Cell.Deallocate
+      |> add_instruction Cell.Proceed
+      |> put_allocator allocator
+  | _ -> failwith "something went very wrong when generating a tail call"
+
+and generate_functor
+    ( ({ seen_registers; _ } as generator),
+      ({ registers; _ } as allocator),
+      store ) ({ elements; arity; namef } as func : Ast.func) =
+  let open RegisterAllocator.RegisterMap in
+  let raw_register = find (Ast.Functor func) registers in
+  let register = cell_register raw_register in
+  let instruction = Cell.PutStructure ((namef, arity), register) in
+  let seen_registers = S.add raw_register seen_registers in
+  let generator, store =
+    add_instruction instruction ({ generator with seen_registers }, store)
+  in
+  List.fold_left Argument.emit_functor_argument
+    (generator, allocator, store)
+    elements
+
+and swap_allocators (allocators : RegisterAllocator.t list)
+    ((generator, _, store) : t * RegisterAllocator.t * Cell.t Store.t) :
+    t * RegisterAllocator.t list * Cell.t Store.t =
+  (generator, allocators, store)
+
+and generate_single_declaration (decl : Ast.decl)
+    ((generator, allocator :: allocators, store) :
+      t * RegisterAllocator.t list * Cell.t Store.t) :
+    t * RegisterAllocator.t list * Cell.t Store.t =
+  match decl with
+  | { head = { elements; _ }; body = [] } ->
+      let gas =
+        Seq.fold_lefti Argument.emit
+          (generator, allocator, store)
+          (List.to_seq elements)
+      in
+      let generator, allocator, store = Argument.emit_queued_arguments gas in
+      (generator, store)
+      |> add_instruction Cell.Proceed
+      |> put_allocator allocator |> swap_allocators allocators |> reset
+  | { head; body } ->
+      (generator, allocator, store)
+      |> emit_head head |> emit_body body |> swap_allocators allocators |> reset
+
+and generate_declaration_and_patch (inst : int -> Cell.instruction)
+    (decl : Ast.decl)
+    ((generator, allocators, store) :
+      t * RegisterAllocator.t list * Cell.t Store.t) :
+    t * RegisterAllocator.t list * Cell.t Store.t =
+  let address_to_patch = generator.p_register in
+  (generator, store) |> add_instruction Cell.Halt (* Placeholder *)
+  |> fun (generator, store) ->
+  (generator, allocators, store) |> generate_single_declaration decl
+  |> fun (({ p_register; _ } as generator), allocators, store) ->
+  ( generator,
+    allocators,
+    Store.code_put (Cell.Instruction (inst p_register)) address_to_patch store
+  )
 
 and generate
-    ((generator, ({ registers; _ } as allocator), store) :
-      t * RegisterAllocator.t * Cell.t Store.t) (value : Ast.t) :
-    t * RegisterAllocator.t * Cell.t Store.t =
-  let open RegisterAllocator.RegisterMap in
+    ((generator, allocators, store) :
+      t * RegisterAllocator.t list * Cell.t Store.t) (value : Ast.clause) :
+    t * RegisterAllocator.t list * Cell.t Store.t =
   match value with
-  | Query { namef; elements; arity } ->
+  | QueryConjunction { namef; elements; arity } ->
+      let (allocator :: allocators) = allocators in
+      let generator = { generator with in_query = true } in
       let generator, allocator, store =
-        List.fold_left Argument.emit_query
+        Seq.fold_lefti Argument.emit
           (generator, allocator, store)
-          elements
+          (List.to_seq elements)
       in
       let instruction = Cell.Call (namef, arity) in
       (generator, store)
       |> add_instruction instruction
+      (* |> add_instruction Cell.Debug *)
       |> add_instruction Cell.Halt
       |> (fun (generator, store) ->
-           ({ generator with variables = S.empty }, store))
+           ({ generator with seen_registers = S.empty }, store))
       |> put_allocator allocator
-  | Functor { namef; elements; arity } ->
-      let register = cell_register @@ find value registers in
-      let instruction = Cell.GetStructure ((namef, arity), register) in
-      let generator, store = add_instruction instruction (generator, store) in
-      let gas =
-        List.fold_left Argument.emit_functor
-          (generator, allocator, store)
-          elements
+      |> swap_allocators allocators (* TODO: deal with multiple queries *)
+  | MultiDeclaration (decl, []) ->
+      let generator = { generator with in_query = false } in
+      (generator, allocators, store) |> generate_single_declaration decl
+  | MultiDeclaration (first, decls) ->
+      let generator = { generator with in_query = false } in
+      let rec split_last (l : 'a list) : 'a list * 'a =
+        match l with
+        | [] -> failwith "impossible"
+        | [ final ] -> ([], final)
+        | first :: rest ->
+            let left, final = split_last rest in
+            (first :: left, final)
       in
-      let generator, allocator, store = List.fold_left generate gas elements in
-      ({ generator with variables = S.empty }, allocator, store)
-  | Variable _ -> (generator, allocator, store)
-  | Declaration { head = { elements; _ }; body = [] } ->
-      let gas =
-        Seq.fold_lefti Fact.emit_argument
-          (generator, allocator, store)
-          (List.to_seq elements)
-      in
-      let generator, allocator, store = Fact.emit_queue_arguments gas in
-      (generator, store)
-      |> add_instruction Cell.Proceed
-      |> put_allocator allocator
-  | Declaration { head; body } ->
-      (generator, allocator, store) |> allocate_head head |> allocate_body body
+      let middle_decls, last_decl = split_last decls in
+      (generator, allocators, store)
+      |> generate_declaration_and_patch (fun n -> Cell.TryMeElse n) first
+      |> fun acc ->
+      List.fold_left
+        (Fun.flip
+        @@ generate_declaration_and_patch (fun n -> Cell.RetryMeElse n))
+        acc middle_decls
+      |> generate_declaration_and_patch (Fun.const Cell.TrustMe) last_decl
