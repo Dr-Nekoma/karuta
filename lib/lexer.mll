@@ -30,6 +30,7 @@ rule read =
   | '.' { DOT }
   | '[' { LEFT_DELIM }
   | ']' { RIGHT_DELIM }
+  | "#%" { EXPRESSION_COMMENT }
   | '%' { skip_line lexbuf }
   | eof { EOF }
   | _ { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
