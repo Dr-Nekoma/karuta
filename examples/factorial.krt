@@ -3,7 +3,6 @@ factorial[X, Out] :- int[X], 'factorial loop'[X, 1, Out].
 % A nice tail-recursive definition.
 'factorial loop'[0, Out, Out] :- int[Out]. % Base case, ensure we have an integer.
 'factorial loop'[N, Acc, Out] :-
-    debug,
     #% this_will_be_ignored,
     multiply[N, Acc, NewAcc],
     neg[1, #%0, #%Whatever, Minus], % Minus is bound to -1, this tests the neg primitive.
