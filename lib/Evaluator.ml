@@ -101,7 +101,7 @@ let deref_cell (cell : Cell.t) store : Cell.t =
       match candidate with
       | Functor _ -> Structure derefed_address
       | _ -> candidate)
-  | Structure _ | Constant _ -> cell
+  | Structure _ | Constant _ | Cell.List _ -> cell
   | _ -> failwith "unreachable deref_cell"
 
 let get_structure ((functor_label, functor_arity) : string * int)
@@ -192,6 +192,16 @@ let unify (a1 : Cell.t) (a2 : Cell.t) ({ store; _ } as computer) : Machine.t =
                 else { computer with fail = true }
             | _ -> failwith "unreachable unify: Structure points at non-Functor"
             )
+        | Cell.List v1, Cell.List v2 ->
+            {
+              computer with
+              store =
+                store
+                |> Store.pdl_push (Reference v1)
+                |> Store.pdl_push (Reference v2)
+                |> Store.pdl_push (Reference (v1 + 1))
+                |> Store.pdl_push (Reference (v2 + 1));
+            }
         | _, _ -> { computer with fail = true }
       else loop computer
   in
@@ -522,6 +532,21 @@ let unify_constant (c : Cell.constant)
         computer
   | Write -> set_constant c computer
 
+let put_list (register : Cell.register)
+    ({ h_register; _ } as computer : Machine.t) : Machine.t =
+  set_register register (Cell.List h_register) computer
+
+let get_list (register : Cell.register)
+    ({ h_register; store; _ } as computer : Machine.t) : Machine.t =
+  match deref_cell (get_register register computer) store with
+  | Cell.Reference _ as reference ->
+      let list = Cell.List (h_register + 1) in
+      store |> Store.heap_put list h_register |> fun store ->
+      bind reference (Reference h_register)
+        { computer with store; h_register = h_register + 1; mode = Write }
+  | Cell.List a -> { computer with s_register = a; mode = Read }
+  | _ -> { computer with fail = true }
+
 let is_integer (register : Cell.register) (computer : Machine.t) : Machine.t =
   let int = deref_cell (get_register register computer) computer.store in
   {
@@ -690,6 +715,12 @@ let eval_step (functor_table : Compiler.functor_map)
                 (put_structure register (name, arity) computer) with
                 p_register = p_register + 1;
               },
+              false )
+        | GetList register ->
+            ( { (get_list register computer) with p_register = p_register + 1 },
+              false )
+        | PutList register ->
+            ( { (put_list register computer) with p_register = p_register + 1 },
               false )
         | PutVariable (x_register, a_register) ->
             ( {

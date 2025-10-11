@@ -4,6 +4,8 @@ module Cell = struct
   and instruction =
     | GetStructure of ((string * int) * register)
     | PutStructure of ((string * int) * register)
+    | PutList of register
+    | GetList of register
     | PutVariable of (register * register)
     | GetVariable of (register * register)
     | SetVariable of register
@@ -39,16 +41,18 @@ module Cell = struct
     | Debug
   [@@deriving show]
 
-  and constant = Integer of int
+  and constant = Integer of int | Atom of string
+  and address = int
 
   and t =
     | Constant of constant
-    | Structure of int
-    | Reference of int
+    | Structure of address
+    | Reference of address
     | Functor of string * int
-    | Address of int
+    | Address of address
     | ArgCount of int
     | Instruction of instruction
+    | List of address
     | Empty
   [@@deriving show]
 

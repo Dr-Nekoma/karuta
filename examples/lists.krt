@@ -1,0 +1,18 @@
+append[[], [], []].
+append[[], Out, Out].
+append[Out, [], Out].
+append[[H|Tail], Second, [H|Mid]] :- append[Tail, Second, Mid].
+
+add[[], [], []].
+add[[H1|Tail1], [H2|Tail2], [HR|TailOut]] :-
+    plus[H1, H2, HR],
+    add[Tail1, Tail2, TailOut].
+
+eq[A, A].
+%% eq[[], []].
+%% eq[[H1|Tail1], [H1|Tail2]] :- eq[Tail1, Tail2].
+%% add[[1,2], [3,4], Out]?
+%% append[[1,2], [3,4], Out]?
+%% eq[[1,2], [1,X]]?
+eq[''[1, ''[2, []]], ''[1, ''[X, []]]]?
+%% eq[1, X]?

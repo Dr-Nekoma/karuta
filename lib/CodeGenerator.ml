@@ -59,6 +59,11 @@ and add_instruction (instruction : Cell.instruction)
   in
   ({ generator with p_register = p_register + 1 }, store)
 
+let add_constant constFn constant (generator, store, allocator) =
+  (generator, store)
+  |> add_instruction @@ constFn constant
+  |> put_allocator allocator
+
 module Argument = struct
   let rec emit_argument_and_queue_nested_if_not_in_query
       (variable : Cell.register -> Cell.instruction)
@@ -82,9 +87,9 @@ module Argument = struct
     in
     match elem with
     | Integer int ->
-        (generator, store)
-        |> add_instruction @@ const @@ Cell.Integer int
-        |> put_allocator allocator
+        add_constant const (Cell.Integer int) (generator, store, allocator)
+    | Functor { namef; arity; _ } when arity = 0 ->
+        add_constant const (Cell.Atom namef) (generator, store, allocator)
     | Variable { namev } ->
         let seen_registers, instruction = Lazy.force new_seen_and_inst in
         ({ generator with seen_registers }, store)
@@ -113,23 +118,25 @@ module Argument = struct
     let open RegisterAllocator.RegisterMap in
     let raw_register = lazy (find elem registers) in
     let register = lazy (cell_register @@ Lazy.force raw_register) in
-    let variable, value, func, const =
+    let variable, value, func, list, const =
       if in_query then
         ( (fun v -> Cell.SetVariable v),
           (fun v -> Cell.SetValue v),
           (fun v -> Cell.PutStructure v),
+          (fun (_, v) -> Cell.PutList v),
           fun v -> Cell.SetConstant v )
       else
         ( (fun v -> Cell.UnifyVariable v),
           (fun v -> Cell.UnifyValue v),
           (fun v -> Cell.GetStructure v),
+          (fun (_, v) -> Cell.GetList v),
           fun v -> Cell.UnifyConstant v )
     in
     match elem with
     | Integer int ->
-        (generator, store)
-        |> add_instruction @@ const @@ Cell.Integer int
-        |> put_allocator allocator
+        add_constant const (Cell.Integer int) (generator, store, allocator)
+    | Functor { namef; arity; _ } when arity = 0 ->
+        add_constant const (Cell.Atom namef) (generator, store, allocator)
     | Variable { namev } ->
         let raw_register = Lazy.force raw_register in
         let register = Lazy.force register in
@@ -147,7 +154,10 @@ module Argument = struct
     | Functor { namef; arity; elements } ->
         let raw_register = Lazy.force raw_register in
         let register = Lazy.force register in
-        let instruction = func ((namef, arity), register) in
+        let instruction =
+          (if namef = "" && arity = 2 then list else func)
+            ((namef, arity), register)
+        in
         let generator =
           { generator with seen_registers = S.add raw_register seen_registers }
         in
@@ -186,23 +196,29 @@ module Argument = struct
     let raw_register = lazy (find elem registers) in
     let register = lazy (cell_register (Lazy.force raw_register)) in
     let arg_register = Cell.X index in
-    let variable, value, func, const =
+    let variable, value, func, list, const =
       if in_query then
         ( (fun v -> Cell.PutVariable v),
           (fun v -> Cell.PutValue v),
           (fun v -> Cell.PutStructure v),
+          (fun (_, v) -> Cell.PutList v),
           fun v -> Cell.PutConstant v )
       else
         ( (fun v -> Cell.GetVariable v),
           (fun v -> Cell.GetValue v),
           (fun v -> Cell.GetStructure v),
+          (fun (_, v) -> Cell.GetList v),
           fun v -> Cell.GetConstant v )
     in
     match elem with
     | Integer int ->
-        (generator, store)
-        |> add_instruction (const (Cell.Integer int, arg_register))
-        |> put_allocator allocator
+        add_constant const
+          (Cell.Integer int, arg_register)
+          (generator, store, allocator)
+    | Functor { namef; arity; _ } when arity = 0 ->
+        add_constant const
+          (Cell.Atom namef, arg_register)
+          (generator, store, allocator)
     | Variable { namev } ->
         let raw_register = Lazy.force raw_register in
         let register = Lazy.force register in
@@ -221,7 +237,10 @@ module Argument = struct
         |> put_allocator allocator
     | Functor { namef; arity; elements } ->
         let raw_register = Lazy.force raw_register in
-        let instruction = func ((namef, arity), arg_register) in
+        let instruction =
+          (if namef = "" && arity = 2 then list else func)
+            ((namef, arity), arg_register)
+        in
         let generator =
           { generator with seen_registers = S.add raw_register seen_registers }
         in
@@ -289,12 +308,18 @@ and emit_body (elements : Ast.func list) (generator, allocator, store) :
           (t * RegisterAllocator.t * Cell.t Store.t) * int)
         (individual_element : Ast.expr) :
         (t * RegisterAllocator.t * Cell.t Store.t) * int =
+      (* TODO: Fix this with ppx for constructors as functions *)
+      let constFn constant = Cell.PutConstant constant in
       match individual_element with
       | Integer int ->
-          ( (generator, store)
-            |> add_instruction
-               @@ Cell.PutConstant (Cell.Integer int, Cell.X counter)
-            |> put_allocator allocator,
+          ( add_constant constFn
+              (Cell.Integer int, Cell.X counter)
+              (generator, store, allocator),
+            counter + 1 )
+      | Functor { namef; arity; _ } when arity = 0 ->
+          ( add_constant constFn
+              (Cell.Atom namef, Cell.X counter)
+              (generator, store, allocator),
             counter + 1 )
       | Variable _ as var ->
           let open RegisterAllocator.RegisterMap in
@@ -358,7 +383,11 @@ and generate_functor
   let open RegisterAllocator.RegisterMap in
   let raw_register = find (Ast.Functor func) registers in
   let register = cell_register raw_register in
-  let instruction = Cell.PutStructure ((namef, arity), register) in
+  let instruction =
+    if namef = "" && arity = 2 then Cell.PutList register
+    else if arity = 0 then Cell.PutConstant (Cell.Atom namef, register)
+    else Cell.PutStructure ((namef, arity), register)
+  in
   let seen_registers = S.add raw_register seen_registers in
   let generator, store =
     add_instruction instruction ({ generator with seen_registers }, store)
