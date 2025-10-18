@@ -88,10 +88,11 @@ let bind (t1 : Cell.t) (t2 : Cell.t) ({ store; _ } as computer : Machine.t) :
   (* TODO: figure out how to deduplicate the first two clauses *)
   | Reference a1, Reference a2 when a2 < a1 ->
       { computer with store = store |> Store.put t2 a1 } |> trail a1
-  | Reference a1, _ ->
+  | Reference a1, r when not (is_reference r) ->
       { computer with store = store |> Store.put t2 a1 } |> trail a1
   | _, Reference a2 ->
       { computer with store = store |> Store.put t1 a2 } |> trail a2
+  | _, _ -> failwith "bind should receive at least one reference"
 
 let deref_cell (cell : Cell.t) store : Cell.t =
   match cell with
@@ -658,19 +659,19 @@ let div_mod_integer
       Cell.Reference _,
       Cell.Constant (Cell.Integer x2) )
     when Int.rem x0 x1 = x2 ->
-      bind remainder (Cell.Constant (Cell.Integer (Int.div x0 x1))) computer
+      bind quotient (Cell.Constant (Cell.Integer (Int.div x0 x1))) computer
   | ( Cell.Constant (Cell.Integer x0),
       Cell.Reference _,
       Cell.Constant (Cell.Integer x1),
       Cell.Constant (Cell.Integer x2) ) ->
-      bind remainder
+      bind divisor
         (Cell.Constant (Cell.Integer (Int.div (x0 - x2) x1)))
         computer
   | ( Cell.Reference _,
       Cell.Constant (Cell.Integer x0),
       Cell.Constant (Cell.Integer x1),
       Cell.Constant (Cell.Integer x2) ) ->
-      bind remainder (Cell.Constant (Cell.Integer ((x0 * x1) + x2))) computer
+      bind dividend (Cell.Constant (Cell.Integer ((x0 * x1) + x2))) computer
   | _ -> { computer with fail = true }
 
 let less_than_or_equal_integer
