@@ -59,7 +59,7 @@ and add_instruction (instruction : Cell.instruction)
   in
   ({ generator with p_register = p_register + 1 }, store)
 
-let add_constant constFn constant (generator, store, allocator) =
+let add_constant constFn constant (generator, allocator, store) =
   (generator, store)
   |> add_instruction @@ constFn constant
   |> put_allocator allocator
@@ -87,9 +87,9 @@ module Argument = struct
     in
     match elem with
     | Integer int ->
-        add_constant const (Cell.Integer int) (generator, store, allocator)
+        add_constant const (Cell.Integer int) (generator, allocator, store)
     | Functor { namef; arity; _ } when arity = 0 ->
-        add_constant const (Cell.Atom namef) (generator, store, allocator)
+        add_constant const (Cell.Atom namef) (generator, allocator, store)
     | Variable { namev } ->
         let seen_registers, instruction = Lazy.force new_seen_and_inst in
         ({ generator with seen_registers }, store)
@@ -134,23 +134,24 @@ module Argument = struct
     in
     match elem with
     | Integer int ->
-        add_constant const (Cell.Integer int) (generator, store, allocator)
+        (if in_query then Fun.id else add_constant const (Cell.Integer int))
+          (generator, allocator, store)
     | Functor { namef; arity; _ } when arity = 0 ->
-        add_constant const (Cell.Atom namef) (generator, store, allocator)
-    | Variable { namev } ->
-        let raw_register = Lazy.force raw_register in
-        let register = Lazy.force register in
-        let seen_registers, instruction =
-          match S.find_opt raw_register seen_registers with
-          | None -> (S.add raw_register seen_registers, variable register)
-          | Some _ -> (seen_registers, value register)
-        in
-        ({ generator with seen_registers }, store)
-        |> add_instruction instruction
-        |> (if in_query then
-              add_instruction (Cell.QueryVariable (register, namev))
-            else Fun.id)
-        |> put_allocator allocator
+        (if in_query then Fun.id else add_constant const (Cell.Atom namef))
+          (generator, allocator, store)
+    | Variable _ ->
+        if in_query then (generator, allocator, store)
+        else
+          let raw_register = Lazy.force raw_register in
+          let register = Lazy.force register in
+          let seen_registers, instruction =
+            match S.find_opt raw_register seen_registers with
+            | None -> (S.add raw_register seen_registers, variable register)
+            | Some _ -> (seen_registers, value register)
+          in
+          ({ generator with seen_registers }, store)
+          |> add_instruction instruction
+          |> put_allocator allocator
     | Functor { namef; arity; elements } ->
         let raw_register = Lazy.force raw_register in
         let register = Lazy.force register in
@@ -214,11 +215,11 @@ module Argument = struct
     | Integer int ->
         add_constant const
           (Cell.Integer int, arg_register)
-          (generator, store, allocator)
+          (generator, allocator, store)
     | Functor { namef; arity; _ } when arity = 0 ->
         add_constant const
           (Cell.Atom namef, arg_register)
-          (generator, store, allocator)
+          (generator, allocator, store)
     | Variable { namev } ->
         let raw_register = Lazy.force raw_register in
         let register = Lazy.force register in
@@ -314,12 +315,12 @@ and emit_body (elements : Ast.func list) (generator, allocator, store) :
       | Integer int ->
           ( add_constant constFn
               (Cell.Integer int, Cell.X counter)
-              (generator, store, allocator),
+              (generator, allocator, store),
             counter + 1 )
       | Functor { namef; arity; _ } when arity = 0 ->
           ( add_constant constFn
               (Cell.Atom namef, Cell.X counter)
-              (generator, store, allocator),
+              (generator, allocator, store),
             counter + 1 )
       | Variable _ as var ->
           let open RegisterAllocator.RegisterMap in
