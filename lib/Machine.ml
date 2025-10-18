@@ -69,11 +69,11 @@ module IM = BatIMap
 type query_map = (string, Cell.t) BatMap.t
 
 module Store = Store.Make (struct
-  let code_size = 1000
-  let heap_size = 1000
-  let stack_size = 1000
-  let pdl_size = 1000
-  let trail_size = 1000
+  let code_size = 10000
+  let heap_size = 100000
+  let stack_size = 100000
+  let pdl_size = 10000
+  let trail_size = 10000
 end)
 
 module IntMap = Map.Make (Int)
