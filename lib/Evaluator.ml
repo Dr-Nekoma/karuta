@@ -543,7 +543,7 @@ let get_list (register : Cell.register)
   | Cell.Reference _ as reference ->
       let list = Cell.List (h_register + 1) in
       store |> Store.heap_put list h_register |> fun store ->
-      bind reference (Reference h_register)
+      bind reference list
         { computer with store; h_register = h_register + 1; mode = Write }
   | Cell.List a -> { computer with s_register = a; mode = Read }
   | _ -> { computer with fail = true }
