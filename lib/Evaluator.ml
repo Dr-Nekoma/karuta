@@ -168,28 +168,28 @@ let unify (a1 : Cell.t) (a2 : Cell.t) ({ store; _ } as computer) : Machine.t =
       let p2, store = Store.pdl_pop store in
       let d1 = deref_cell p1 store in
       let d2 = deref_cell p2 store in
+      loop
+      @@
       if d1 != d2 then
         match (d1, d2) with
-        | Reference _, _ | _, Reference _ ->
-            loop @@ bind d1 d2 { computer with store }
+        | Reference _, _ | _, Reference _ -> bind d1 d2 { computer with store }
         | Constant l, Constant r -> { computer with fail = l <> r }
         | Structure a1, Structure a2 -> (
             match (Store.get store a1, Store.get store a2) with
             | Functor (s1, n1), Functor (s2, n2) ->
                 let open Batteries in
                 if s1 = s2 && n1 = n2 then
-                  loop
-                    {
-                      computer with
-                      store =
-                        List.fold_left
-                          (fun store i ->
-                            store
-                            |> Store.pdl_push (Reference (a1 + i))
-                            |> Store.pdl_push (Reference (a2 + i)))
+                  {
+                    computer with
+                    store =
+                      List.fold_left
+                        (fun store i ->
                           store
-                          (List.of_enum (1 -- n1));
-                    }
+                          |> Store.pdl_push (Reference (a1 + i))
+                          |> Store.pdl_push (Reference (a2 + i)))
+                        store
+                        (List.of_enum (1 -- n1));
+                  }
                 else { computer with fail = true }
             | _ -> failwith "unreachable unify: Structure points at non-Functor"
             )
@@ -204,7 +204,7 @@ let unify (a1 : Cell.t) (a2 : Cell.t) ({ store; _ } as computer) : Machine.t =
                 |> Store.pdl_push (Reference (v2 + 1));
             }
         | _, _ -> { computer with fail = true }
-      else loop computer
+      else computer
   in
   loop preparedComputer
 
