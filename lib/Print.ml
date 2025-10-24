@@ -13,9 +13,7 @@ let rec inspect_list (store : Cell.t Store.t) (address : int) : string =
 and inspect (store : Cell.t Store.t) (register : Cell.t) : string =
   match register with
   | Constant const -> (
-    match const with
-    | Integer i -> string_of_int i
-    | Atom atom -> atom)
+      match const with Integer i -> string_of_int i | Atom atom -> atom)
   | Cell.List address -> "[" ^ inspect_list store address
   | Structure address -> (
       match Store.get store address with
