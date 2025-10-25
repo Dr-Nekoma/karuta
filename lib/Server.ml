@@ -5,41 +5,6 @@ module Result = struct
   let ( let+ ) = Result.bind
 end
 
-let bimap f g (a1, a2) = (f a1, g a2)
-
-let update_store (computer : Machine.t) (store : Machine.Cell.t Machine.Store.t)
-    : Machine.t =
-  { computer with store }
-
-let program_output =
-  let open Result in
-  let+ content =
-    In_channel.with_open_text "examples/triangular.krt" (fun fc ->
-        try Ok (In_channel.input_all fc)
-        with End_of_file -> Error "End of File!")
-  in
-  match Parse.parse content with
-  | [] ->
-      print_endline "File could not be parsed.";
-      Error "Could not parse file"
-  | decls_queries -> (
-      let compiler, computer =
-        Machine.initialize () |> fun initialComputer ->
-        Compiler.compile
-          ( Preprocessor.group_clauses decls_queries,
-            Compiler.initialize (),
-            initialComputer.store )
-        |> bimap Fun.id (update_store initialComputer)
-      in
-      match compiler.entry_point with
-      | None -> Error "Nothing"
-      | Some entry_point ->
-          let computer =
-            Evaluator.eval compiler.functor_table
-              { computer with p_register = entry_point.p_register }
-          in
-          Ok (Protocol.query_ast_args computer))
-
 let host = Unix.inet_addr_loopback
 let port = 7632
 

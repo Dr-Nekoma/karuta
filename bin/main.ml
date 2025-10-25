@@ -31,7 +31,7 @@ let _ =
       | None -> None
       | Some entry_point ->
           let computer =
-            Lib.Evaluator.eval compiler.functor_table
+            Lib.Evaluator.eval state compiler.functor_table
               { computer with p_register = entry_point.p_register }
           in
           print_endline @@ Lib.Print.query_args computer;
