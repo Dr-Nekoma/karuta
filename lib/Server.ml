@@ -7,21 +7,22 @@ end
 
 let bimap f g (a1, a2) = (f a1, g a2)
 
-let update_store (computer : Machine.t)
-    (store : Machine.Cell.t Machine.Store.t) : Machine.t =
+let update_store (computer : Machine.t) (store : Machine.Cell.t Machine.Store.t)
+    : Machine.t =
   { computer with store }
 
 let program_output =
   let open Result in
   let+ content =
     In_channel.with_open_text "examples/triangular.krt" (fun fc ->
-        try Ok (In_channel.input_all fc) with End_of_file -> Error "End of File!")
+        try Ok (In_channel.input_all fc)
+        with End_of_file -> Error "End of File!")
   in
   match Parse.parse content with
   | [] ->
       print_endline "File could not be parsed.";
       Error "Could not parse file"
-  | decls_queries -> begin
+  | decls_queries -> (
       let compiler, computer =
         Machine.initialize () |> fun initialComputer ->
         Compiler.compile
@@ -37,8 +38,7 @@ let program_output =
             Evaluator.eval compiler.functor_table
               { computer with p_register = entry_point.p_register }
           in
-          Ok (Print.query_ast_args computer)
-      end
+          Ok (Protocol.query_ast_args computer))
 
 let host = Unix.inet_addr_loopback
 let port = 7632
@@ -48,8 +48,7 @@ let create_socket () : Lwt_unix.file_descr t =
   Lwt_unix.set_close_on_exec sock;
   Lwt_unix.setsockopt sock Unix.SO_REUSEADDR true;
   let () = Lwt_unix.set_blocking sock false in
-  Lwt_io.write_line Lwt_io.stdout "🦉 Karuta Server Started"
-  >>= fun () ->
+  Lwt_io.write_line Lwt_io.stdout "🦉 Karuta Server Started" >>= fun () ->
   Lwt_unix.bind sock @@ ADDR_INET (host, port) >>= fun () ->
   Lwt_unix.listen sock 10;
   return sock
@@ -68,8 +67,8 @@ let client_read sock maxlen =
   print_string "RECEIVED: ";
   print_endline x;
   match program_output with
-  | Ok ast -> return (Sexplib.Sexp.to_string @@ Protocol.sexp_of_output ast);
-  | Error err -> failwith (Printf.sprintf "%s" err);
+  | Ok ast -> return (Sexplib.Sexp.to_string @@ Protocol.sexp_of_output ast)
+  | Error err -> failwith (Printf.sprintf "%s" err)
 [@@warning "-27-8-26"]
 
 let rec socket_read sock =
@@ -77,7 +76,8 @@ let rec socket_read sock =
   Lwt_unix.accept sock >>= fun (client, _) ->
   client_read client 512
   (* >>= fun results -> Lwt_unix.send client (Data_encoding.Binary.to_bytes_exn Data_encoding.Encoding.int32 5l) 0 1 [] *)
-  >>= fun results ->
+  >>=
+  fun results ->
   Lwt_unix.send client (Bytes.of_string results) 0 (String.length results) []
   >>= fun _ ->
   Lwt_unix.wait_write client >>= fun () ->

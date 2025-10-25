@@ -1,7 +1,20 @@
 open Machine
 
-let rec inspect (store : Cell.t Store.t) (register : Cell.t) : string =
+let rec inspect_list (store : Cell.t Store.t) (address : int) : string =
+  let head = inspect store (Reference address) in
+  let tail =
+    match Evaluator.deref_cell (Reference (address + 1)) store with
+    | Cell.Constant (Cell.Atom "") -> "]"
+    | Cell.List next_address -> ", " ^ inspect_list store next_address
+    | others -> " | " ^ inspect store others ^ "]"
+  in
+  head ^ tail
+
+and inspect (store : Cell.t Store.t) (register : Cell.t) : string =
   match register with
+  | Constant const -> (
+      match const with Integer i -> string_of_int i | Atom atom -> atom)
+  | Cell.List address -> "[" ^ inspect_list store address
   | Structure address -> (
       match Store.get store address with
       | Functor (name, arity) ->
@@ -13,46 +26,16 @@ let rec inspect (store : Cell.t Store.t) (register : Cell.t) : string =
           let middle = List.fold_left folder "" (List.of_enum (0 --^ arity)) in
           if arity = 0 then name else name ^ "[" ^ middle ^ "]"
       | _ -> failwith "Nonsense via structure")
-  | Reference address -> (
-      let next = Store.get store @@ Evaluator.deref address store in
+  | Reference _ -> (
+      let next = Evaluator.deref_cell register store in
       match next with
       | Reference _ -> failwith "TODO: take care of free variables"
       | _ -> inspect store next)
   | Empty | Functor _ | ArgCount _ | Instruction _ | Address _ ->
-     failwith "unrechable inspect"
+      failwith "unreachable inspect"
 
-let rec to_ast (store : Cell.t Store.t) (register : Cell.t) : Protocol.ast =
-  match register with
-  | Structure addr -> (
-      match Store.get store addr with
-      | Functor (name, arity) ->
-          let rec collect i acc =
-            if i = arity then List.rev acc
-            else
-              let child = Store.get store (addr + i + 1) in
-              collect (i + 1) (to_ast store child :: acc)
-          in
-          Functor {name; children = collect 0 []}
-      | _ -> failwith "Expected Functor at structure address"
-    )
-  | Reference addr ->
-      to_ast store (Store.get store (Evaluator.deref addr store))
-  | _ -> failwith "Cannot convert non-structured term to AST"
-
-let query_ast_args ({ x_registers; args; store; _ } : Machine.t) : Protocol.ast list =
-  match args with
-  | None -> []
-  | Some how_many ->
-      let open Machine.IntMap in
-      let find_register idx = find idx x_registers in
-      List.init how_many (fun i -> to_ast store (find_register i))
-
-let query_args ({ x_registers; args; store; _ } : Machine.t) : string =
-  match args with
-  | None -> ""
-  | Some how_many ->
-      let open Machine.IntMap in
-      let find_register idx = find idx x_registers in
-      let open Batteries in
-      let folder acc elem = acc ^ " | " ^ inspect store (find_register elem) in
-      List.fold_left folder "" (List.of_enum (0 --^ how_many))
+let query_args ({ store; query_variables; _ } : Machine.t) : string =
+  let folder acc (variable, cell) =
+    acc ^ variable ^ " = " ^ inspect store cell ^ "\n"
+  in
+  BatSeq.fold_left folder "" (BatMap.to_seq query_variables)

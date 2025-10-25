@@ -4,14 +4,20 @@ module Cell = struct
   and instruction =
     | GetStructure of ((string * int) * register)
     | PutStructure of ((string * int) * register)
+    | PutList of register
+    | GetList of register
     | PutVariable of (register * register)
     | GetVariable of (register * register)
     | SetVariable of register
-    | SetValue of register
     | UnifyVariable of register
+    | SetValue of register
     | GetValue of (register * register)
     | PutValue of (register * register)
     | UnifyValue of register
+    | SetConstant of constant
+    | GetConstant of (constant * register)
+    | PutConstant of (constant * register)
+    | UnifyConstant of constant
     | Call of (Ast.tag * int)
     | Execute of (Ast.tag * int)
     | Proceed
@@ -20,17 +26,33 @@ module Cell = struct
     | TryMeElse of int
     | RetryMeElse of int
     | TrustMe
-    | Halt of int
+    | Halt
+    | QueryVariable of (register * string)
+    | Builtin of builtin
+  [@@deriving show]
+
+  and builtin =
+    | IsInteger
+    | PlusInteger
+    | NegateInteger
+    | MultiplyInteger
+    | DivModInteger
+    | LessThanOrEqualInteger
     | Debug
   [@@deriving show]
 
+  and constant = Integer of int | Atom of string
+  and address = int
+
   and t =
-    | Structure of int
-    | Reference of int
+    | Constant of constant
+    | Structure of address
+    | Reference of address
     | Functor of string * int
-    | Address of int
+    | Address of address
     | ArgCount of int
     | Instruction of instruction
+    | List of address
     | Empty
   [@@deriving show]
 
@@ -44,12 +66,14 @@ end
 
 module IM = BatIMap
 
+type query_map = (string, Cell.t) BatMap.t
+
 module Store = Store.Make (struct
-  let code_size = 1000
-  let heap_size = 1000
-  let stack_size = 1000
-  let pdl_size = 1000
-  let trail_size = 1000
+  let code_size = 10000
+  let heap_size = 100000
+  let stack_size = 100000
+  let pdl_size = 10000
+  let trail_size = 10000
 end)
 
 module IntMap = Map.Make (Int)
@@ -72,6 +96,7 @@ type t = {
   debug : bool;
   trace : bool;
   args : int option;
+  query_variables : query_map;
 }
 
 let show_store (store : Cell.t Store.t) (start_index : int) (end_index : int) :
@@ -132,6 +157,7 @@ let initialize () : t =
     mode = Mode.Read;
     fail = false;
     debug = false;
-    trace = true;
+    trace = false;
     args = None;
+    query_variables = BatMap.empty;
   }

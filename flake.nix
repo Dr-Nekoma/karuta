@@ -71,17 +71,20 @@
             duneVersion = "3";
             src = sources.ocaml;
 
-            buildInputs = with ocamlPackages; [
-              menhir
-              ppx_deriving
-              ppx_enumerate              
-              ppxlib
-              batteries
-              earlybird
-              ppx_sexp_conv
-              sexplib
-              lwt
-              lwt-exit
+            nativeBuildInputs = [
+              ocamlPackages.menhir
+            ];
+
+            buildInputs = [
+              ocamlPackages.ppx_deriving
+              ocamlPackages.ppx_enumerate
+              ocamlPackages.ppxlib
+              ocamlPackages.batteries
+              ocamlPackages.earlybird
+              ocamlPackages.ppx_sexp_conv
+              ocamlPackages.sexplib
+              ocamlPackages.lwt
+              ocamlPackages.lwt-exit
               # Ocaml package dependencies needed to build go here.
             ];
 
