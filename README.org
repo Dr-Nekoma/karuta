@@ -13,7 +13,7 @@ might happen if you are crazy enough to use it.
 - [X] PL Evaluation
 - [X] PL Integer Literals
 - [X] PL List Literals
-- [X] PL Query Conjuction
+- [X] PL Query Conjunction
 - [X] Comments
 - [ ] Namespacing
 - [ ] Special syntax for database support using ~@~
