@@ -34,7 +34,6 @@ let load filepath =
          Evaluator.eval compiler.functor_table
            { computer with p_register = entry_point.p_register }
        in
-       print_endline @@ Print.query_args computer;
        Some (compiler,computer))
 
 let run content compiler_and_computer: (Compiler.t * Machine.t) option =
