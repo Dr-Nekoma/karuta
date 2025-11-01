@@ -53,10 +53,10 @@ module Interpreter = struct
       (state, "")
     else if trimmed.[0] = '\\' then
       (* Meta-command *)
-      if trimmed = "\\q" then raise Exit
+      if trimmed = "\\q" then failwith "Exit! 💣💥"
       else (state, "Executed meta-command: " ^ trimmed)
     else
-      match Step.run trimmed state with
+      match Utils.run trimmed state with
       | Some (_, computer) as new_state ->
          (new_state, Print.query_args computer)
       | None ->
@@ -123,7 +123,7 @@ let rec loop term history state buffer =
       loop term history state buffer
 
 let x term () =
-  loop term (LTerm_history.create []) (Step.load "examples/lists.krt") ""
+  loop term (LTerm_history.create []) (Utils.load "examples/lists.krt") ""
 
 let main () =
   LTerm_inputrc.load ()
