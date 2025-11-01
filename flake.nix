@@ -86,6 +86,7 @@
               ocamlPackages.lwt
               ocamlPackages.lwt-exit
               ocamlPackages.lambda-term
+              ocamlPackages.textutils
               # Ocaml package dependencies needed to build go here.
             ];
 
@@ -203,6 +204,7 @@
               ocamlPackages.lwt
               ocamlPackages.lwt-exit
               ocamlPackages.lambda-term
+              ocamlPackages.textutils
             ];
 
             # Tools from packages
