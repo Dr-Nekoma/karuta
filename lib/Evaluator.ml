@@ -522,9 +522,13 @@ let unify_constant (c : Cell.constant)
     ({ mode; store; s_register; _ } as computer : Machine.t) : Machine.t =
   match mode with
   | Read ->
-      get_constant_from_dereferenced_cell c
-        (deref_cell (Store.get store s_register) store)
-        computer
+      {
+        (get_constant_from_dereferenced_cell c
+           (deref_cell (Store.get store s_register) store)
+           computer)
+        with
+        s_register = s_register + 1;
+      }
   | Write -> set_constant c computer
 
 let put_list (register : Cell.register)
