@@ -32,10 +32,12 @@ let show_clauses (clauses : Ast.clause list) : string =
   List.fold_left (fun acc term -> acc ^ "\n" ^ Ast.show_clause term) "" clauses
 [@@warning "-32"]
 
-let check_empty_heads (clause : Ast.parser_clause) : Ast.parser_clause =
+let check_heads (clause : Ast.parser_clause) : Ast.parser_clause =
   match clause with
   | Declaration { head = { namef = ""; _ }; _ } ->
-      failwith "You cannot have a query or declaration with an empty name"
+      failwith "You cannot declare a predicate with an empty name"
+  | Declaration { head = { namef; _ }; _ } when String.contains namef ':' ->
+      failwith "You cannot declare a predicate with a ':' in its name"
   | other -> other
 
 module S = BatSet
@@ -89,5 +91,5 @@ let group_clauses (clauses : Ast.parser_clause list) : Ast.clause list =
   let open Batteries in
   clauses
   |> List.filter_map remove_comments
-  |> List.map check_empty_heads |> List.group compare_clauses
+  |> List.map check_heads |> List.group compare_clauses
   |> List.concat_map multi_mapper

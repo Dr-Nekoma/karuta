@@ -12,7 +12,7 @@ let digit = ['0'-'9']
 let lower_letter = ['a'-'z']
 let upper_letter = ['A'-'Z']
 let letter = lower_letter | upper_letter
-let ident = lower_letter (letter | '_' | '-' | digit)*
+let ident = lower_letter (letter | '_' | '-' | ':' | digit)*
 let upper_ident = upper_letter (letter | '_' | digit)*
 let int = '-'? ['0'-'9'] ['0'-'9']*
 
