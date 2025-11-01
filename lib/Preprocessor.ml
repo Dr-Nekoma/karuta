@@ -10,6 +10,8 @@ let rec remove_comments (clause : Ast.parser_clause) : Ast.parser_clause option
     match func with { namef = "comment"; _ } -> false | _ -> true
   in
   match clause with
+  | CompilerDirective (head, body) ->
+      Some (CompilerDirective (head, List.filter_map remove_comments body))
   | Declaration { head = { namef = "comment"; _ }; _ } -> None
   | Declaration { head; body } ->
       Some (Declaration { head; body = body |> List.filter non_comment })
@@ -53,8 +55,10 @@ let rec find_variables (element : Ast.expr) : variable_set =
         S.empty more_elements
   | _ -> S.empty
 
-let parser_to_compiler (clause : Ast.parser_clause) : Ast.clause list =
+let rec parser_to_compiler (clause : Ast.parser_clause) : Ast.clause list =
   match clause with
+  | CompilerDirective (head, body) ->
+      [ Directive (head, List.concat_map parser_to_compiler body) ]
   | Declaration decl -> [ MultiDeclaration (decl, []) ]
   | QueryConjunction funcs ->
       let folder set func = S.union set (find_variables @@ Ast.Functor func) in
