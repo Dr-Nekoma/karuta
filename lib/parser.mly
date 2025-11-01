@@ -7,6 +7,8 @@
 %token <string> UPPER_IDENT
 %token LEFT_DELIM
 %token RIGHT_DELIM
+%token DIRECTIVE_LEFT_DELIM
+%token DIRECTIVE_RIGHT_DELIM
 %token PIPE
 %token COMMA
 %token DOT
@@ -15,20 +17,32 @@
 %token QUERY
 %token EXPRESSION_COMMENT
 
-%start <Ast.ParserClause.t list> program
+%start <Ast.ParserClause.t list> file
 %%
 
-program:
-  | declaration program
+program(terminator):
+  | declaration program(terminator)
     { ($1 :: $2) }
-  | EXPRESSION_COMMENT declaration program
+  | EXPRESSION_COMMENT declaration program(terminator)
     { $3 }
-  | query program
+  | query program(terminator)
     { ($1 :: $2) }
-  | EXPRESSION_COMMENT query program
+  | directive program(terminator)
+    { ($1 :: $2) }
+  | EXPRESSION_COMMENT query program(terminator)
     { $3 }
-  | EOF
+  | terminator
     { [] }
+  ;
+
+program_fragment:
+  | program(DIRECTIVE_RIGHT_DELIM)
+    { $1 }
+  ;
+
+file:
+  | program(EOF)
+    { $1 }
   ;
 
 functorr:
@@ -40,6 +54,13 @@ functorr:
   { ({ namef = functor_name; elements = []; arity = 0 } : Ast.func) }
   | functor_name = LITERAL_ATOM
   { ({ namef = functor_name; elements = []; arity = 0 } : Ast.func) }
+  ;
+
+directive:
+  | HOLDS; functor_elem = functorr; DOT
+    { Ast.CompilerDirective (functor_elem, []) }
+  | HOLDS; functor_elem = functorr; DIRECTIVE_LEFT_DELIM; body = program_fragment; DOT
+    { Ast.CompilerDirective (functor_elem, body) }
   ;
 
 maybe_functorr:
