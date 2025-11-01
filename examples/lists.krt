@@ -38,4 +38,7 @@ eq[A, A].
 
 main[Out] :- 'rev iota'[1000, List], partition[2, List, Out].
 
-debug, add[[1, 2], [3, 4], AddOut], reverse[[1, 2, 3, 4], RevOut], append[[1, 2], [3, 4], AppendOut]?
+main[MainOut],
+add[[1, 2], [3, 4], AddOut],
+reverse[[1, 2, 3, 4], RevOut],
+append[[1, 2], [3, 4], AppendOut]?
