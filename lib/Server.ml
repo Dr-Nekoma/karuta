@@ -31,9 +31,10 @@ let client_read sock maxlen =
   _read sock String.empty >>= fun x ->
   print_string "RECEIVED: ";
   print_endline x;
-  match program_output with
-  | Ok ast -> return (Sexplib.Sexp.to_string @@ Protocol.sexp_of_output ast)
-  | Error err -> failwith (Printf.sprintf "%s" err)
+  failwith "Uh oh"
+  (* match program_output with *)
+  (* | Ok ast -> return (Sexplib.Sexp.to_string @@ Protocol.sexp_of_output ast) *)
+  (* | Error err -> failwith (Printf.sprintf "%s" err) *)
 [@@warning "-27-8-26"]
 
 let rec socket_read sock =
