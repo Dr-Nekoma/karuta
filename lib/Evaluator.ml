@@ -535,10 +535,8 @@ let get_list (register : Cell.register)
     ({ h_register; store; _ } as computer : Machine.t) : Machine.t =
   match deref_cell (get_register register computer) store with
   | Cell.Reference _ as reference ->
-      let list = Cell.List (h_register + 1) in
-      store |> Store.heap_put list h_register |> fun store ->
-      bind reference list
-        { computer with store; h_register = h_register + 1; mode = Write }
+      let list = Cell.List h_register in
+      bind reference list { computer with mode = Write }
   | Cell.List a -> { computer with s_register = a; mode = Read }
   | _ -> { computer with fail = true }
 
