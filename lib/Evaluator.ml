@@ -110,19 +110,13 @@ let get_structure ((functor_label, functor_arity) : string * int)
     Machine.t =
   match deref_cell (get_register register computer) store with
   | Reference _ as reference ->
-      let structure = Structure (h_register + 1) in
+      let structure = Structure h_register in
       let func = Functor (functor_label, functor_arity) in
       let computer =
-        {
-          computer with
-          store =
-            store
-            |> Store.heap_put structure h_register
-            |> Store.heap_put func (h_register + 1);
-        }
-        |> bind reference (Reference h_register)
+        { computer with store = Store.heap_put func h_register store }
+        |> bind reference structure
       in
-      { computer with h_register = h_register + 2; mode = Write }
+      { computer with h_register = h_register + 1; mode = Write }
   | Structure a -> (
       match Store.heap_get store a with
       | Functor (label, arity)
