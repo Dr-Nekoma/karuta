@@ -137,7 +137,7 @@ let make_test { example; expected } =
   (* TODO: Discover why these many dots are necessary... *)
   let file = "../../../examples/" ^ example in
   match Executor.run file with
-  | None -> failwith @@ "Could not execute file: " ^ file
+  | None -> (example, Alcotest.fail ("Could not run example: " ^ example))
   | Some computer ->
       let expected_results = expected |> List.to_seq |> BatMap.of_seq in
       computer |> Crawler.query_args
