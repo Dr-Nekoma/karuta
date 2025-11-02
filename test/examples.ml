@@ -119,7 +119,7 @@ let examples : t list =
 let test_expected_value (program_result : string) (expected_result : string) ()
     =
   Alcotest.(check string)
-    "matched variable with value" program_result expected_result
+    "matched variable with value" expected_result program_result
 
 let make_test_case (example : string) (expected_results : Query.variable_map)
     (variable : Query.variable) (value : Query.value) =
