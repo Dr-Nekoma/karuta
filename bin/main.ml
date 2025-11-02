@@ -1,63 +1,39 @@
-let () = Lwt_main.run (Lib.REPL.main ())
+open Cmdliner
 
-(* First, open the required modules *)
-open Core
-open Ascii_table
+(* Command: --repl *)
+let repl_term =
+  let doc = "Start the interactive REPL." in
+  Arg.(value & flag & info [ "repl" ] ~doc)
 
-(* Define a record type for your rows *)
-type person =
-  { name : string
-  ; salary  : float
-  ; role : string
-  }
+(* Command: --compile FILE *)
+let compile_term =
+  let doc = "Compile a Karuta source file." in
+  let file = Arg.(value & opt (some string) None & info [ "compile" ] ~docv:"FILE" ~doc) in
+  file
 
-type department =
-  { employees: person list
-  ; name: string }
+(* Map arguments to behavior *)
+let main repl_flag compile_opt =
+  match repl_flag, compile_opt with
+  | true, None ->
+     Lwt_main.run (Lib.REPL.main ());
+     `Ok ()
+  | false, Some _file ->
+     (* compile file; *)
+     `Ok ()
+  | true, Some _ ->
+      `Error (false, "Options --repl and --compile cannot be used together.")
+  | false, None ->
+      `Error (false, "No command given. Try --repl or --compile <file>.")
 
-type company =
-  { departments: department list
-  ; name: string }
+let cmd =
+  let open Cmdliner in
+  let term =
+    Term.(ret (const main $ repl_term $ compile_term))
+  in
+  let info =
+    Cmd.info "karuta" ~version:"0.1.0" ~doc:"Karuta CLI"
+  in
+  Cmd.v info term
 
-(* Create a list of rows *)
-let people : person list =
-  [ { name = "Magueta"; salary = 1400.0; role = "DBA" }
-  ; { name = "Nathan"; salary = 1200.0; role = "FrontEnd Master" }
-  ; { name = "Lemos"; salary = 1520.0; role = "Manager" }
-  ; { name = "Marinho"; salary = 1244.0; role = "Specialist" }
-  ]
-
-let department: department list =
-  [ { employees = people
-    ; name = "Sales" }
-  ; { employees = people
-    ; name = "IT" }
-  ]
-
-let company: company list =
-  [ { departments = department
-    ; name = "Marcosoft" }
-  ; { departments = department
-    ; name = "Nathan J. Solutions" }
-  ]
-
-let columns : person Column.t list =
-  [ Column.create ~align:Align.Left "Name" (fun (p: person) -> p.name)
-  ; Column.create ~align:Align.Right "Salary" (fun p -> Float.to_string p.salary)
-  ; Column.create ~align:Align.Left "Role" (fun p -> p.role)
-  ]
-
-let columns_2 : department Column.t list =
-  [ Column.create ~align:Align.Right "Employees" (fun (d: department) ->
-        Ascii_table.to_string ~bars:`Unicode columns d.employees)
-  ; Column.create ~align:Align.Right "Department Name" (fun (d: department) -> d.name)
-  ]
-
-let columns_3 : company Column.t list =
-  [ Column.create ~align:Align.Right "Departments" (fun (c: company) ->
-      Ascii_table.to_string ~bars:`Unicode columns_2 c.departments)
-  ; Column.create ~align:Align.Right "Name" (fun (c: company) -> c.name)
-  ]
 let () =
-  Ascii_table.to_string ~bars:`Unicode columns_3 company
-  |> print_endline
+  exit (Cmd.eval cmd)

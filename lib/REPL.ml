@@ -123,7 +123,7 @@ let rec loop term history state buffer =
       loop term history state buffer
 
 let x term () =
-  loop term (LTerm_history.create []) (Utils.load "examples/minus.krt") ""
+  loop term (LTerm_history.create []) (Utils.load "examples/lists.krt") ""
 
 let main () =
   LTerm_inputrc.load ()
