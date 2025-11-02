@@ -58,7 +58,7 @@ module Interpreter = struct
     else
       match Utils.run trimmed state with
       | Some (_, computer) as new_state ->
-         (new_state, Print.Tabulation.query_args computer)
+         (new_state, Crawler.Tabulation.query_args computer)
       | None ->
          (state, "")
 end
@@ -122,7 +122,7 @@ let rec loop term history state buffer =
   | None ->
       loop term history state buffer
 
-let x term () =
+let program_loader term () =
   loop term (LTerm_history.create []) (Utils.load "examples/lists.krt") ""
 
 let main () =
@@ -132,8 +132,6 @@ let main () =
     Lazy.force LTerm.stdout
     >>= fun term ->
     LTerm.fprintls term (eval [S "Karuta REPL\n"])
-    >>= x term ) (function
+    >>= program_loader term ) (function
       | LTerm_read_line.Interrupt -> Lwt.return ()
       | exn -> Lwt.fail exn)
-
-let () = Lwt_main.run (main ())

@@ -20,7 +20,7 @@ let main repl_flag compile_opt =
   | false, Some file -> begin
       match Lib.Executor.run file with
       | None -> failwith @@ "Could not execute file: " ^ file
-      | Some computer -> print_endline @@ Lib.Crawler.query_string computer;
+      | Some computer -> print_endline @@ Lib.Crawler.StandardOut.query_args computer;
       `Ok ()
      end
   | true, Some _ ->
