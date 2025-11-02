@@ -42,6 +42,7 @@ and compile :
   | d :: ds, ({ entry_point; p_register; functor_table } as compiler), store
     -> (
       match d with
+      | Directive ({ namef = "comment"; _ }, _) -> compile (ds, compiler, store)
       | MultiDeclaration ({ head; _ }, _) as form ->
           let open FunctorMap in
           ( allocate_registers form |> fun allocators ->
