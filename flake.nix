@@ -39,6 +39,7 @@
               (nix-filter.lib.inDirectory "bin")
               (nix-filter.lib.inDirectory "lib")
               (nix-filter.lib.inDirectory "test")
+              (nix-filter.lib.inDirectory "examples")
             ];
           };
 
@@ -88,6 +89,7 @@
               ocamlPackages.lambda-term
               ocamlPackages.textutils
               ocamlPackages.cmdliner
+              ocamlPackages.alcotest
               # Ocaml package dependencies needed to build go here.
             ];
 
@@ -207,6 +209,7 @@
               ocamlPackages.lambda-term
               ocamlPackages.textutils
               ocamlPackages.cmdliner
+              ocamlPackages.alcotest
             ];
 
             # Tools from packages

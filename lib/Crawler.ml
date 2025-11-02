@@ -97,3 +97,11 @@ module Tabulation: INTROSPECT = struct
     Ascii_table.to_string ~header_attr:[`Magenta] ~bars:`Unicode columns @@ List.of_seq vars
 end
 
+let query_args ({ store; query_variables; _ } : Machine.t) : Query.variable_map
+    =
+  let mapper cell = inspect store cell in
+  BatMap.map mapper query_variables
+
+let query_string (computer : Machine.t) : string =
+  let folder variable cell acc = acc ^ variable ^ " = " ^ cell ^ "\n" in
+  BatMap.foldi folder (query_args computer) ""

@@ -17,9 +17,12 @@ let main repl_flag compile_opt =
   | true, None ->
      Lwt_main.run (Lib.REPL.main ());
      `Ok ()
-  | false, Some _file ->
-     (* compile file; *)
-     `Ok ()
+  | false, Some file -> begin
+      match Lib.Executor.run file with
+      | None -> failwith @@ "Could not execute file: " ^ file
+      | Some computer -> print_endline @@ Lib.Crawler.query_string computer;
+      `Ok ()
+     end
   | true, Some _ ->
       `Error (false, "Options --repl and --compile cannot be used together.")
   | false, None ->
@@ -37,3 +40,4 @@ let cmd =
 
 let () =
   exit (Cmd.eval cmd)
+
