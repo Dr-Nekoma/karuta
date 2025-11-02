@@ -103,8 +103,7 @@ and not_debug ({ namef; arity; _ } : Ast.func) : bool =
 and allocate_declaration : Ast.decl -> t =
  fun { head = { elements; arity; _ } as head; body } ->
   let first_non_argument_register =
-    List.fold_left max arity
-    @@ List.map (fun ({ arity; _ } : Ast.func) -> arity) body
+    List.fold_left (fun acc (f : Ast.func) -> max acc f.arity) arity body
   in
   let first_clause, other_clauses =
     match List.filter not_debug body with
