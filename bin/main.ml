@@ -1,4 +1,4 @@
-(* let () = Lwt_main.run (Lib.REPL.main ()) *)
+let () = Lwt_main.run (Lib.REPL.main ())
 
 (* First, open the required modules *)
 open Core

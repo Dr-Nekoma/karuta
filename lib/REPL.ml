@@ -58,7 +58,7 @@ module Interpreter = struct
     else
       match Utils.run trimmed state with
       | Some (_, computer) as new_state ->
-         (new_state, Print.query_args computer)
+         (new_state, Print.Tabulation.query_args computer)
       | None ->
          (state, "")
 end
@@ -123,7 +123,7 @@ let rec loop term history state buffer =
       loop term history state buffer
 
 let x term () =
-  loop term (LTerm_history.create []) (Utils.load "examples/lists.krt") ""
+  loop term (LTerm_history.create []) (Utils.load "examples/minus.krt") ""
 
 let main () =
   LTerm_inputrc.load ()
