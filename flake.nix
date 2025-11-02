@@ -193,6 +193,7 @@
               ocamlPackages.ppx_deriving
               ocamlPackages.ppxlib
               ocamlPackages.earlybird
+              ocamlPackages.alcotest
             ];
 
             # Tools from packages
