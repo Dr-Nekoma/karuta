@@ -1,7 +1,6 @@
 let _ =
   (* TODO: Fix this CLI on Issue 11 *)
   let file = Sys.argv.(1) in
-  match Lib.Executor.run  file with
+  match Lib.Executor.run file with
   | None -> failwith @@ "Could not execute file: " ^ file
   | Some computer -> print_endline @@ Lib.Crawler.query_string computer
-
