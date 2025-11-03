@@ -34,6 +34,7 @@ let parse (filepath : string) : Ast.parser_clause list =
 module Option = struct
   let ( let+ ) = Option.bind
   let some = Option.some
+  let map = Option.map
 end
 
 let compile' ((compiler, computer) : Compiler.t * Machine.t) :
@@ -58,8 +59,8 @@ let eval ((compiler, computer) : Compiler.t * Machine.t) :
       in
       Some (compiler, computer)
 
-let run (filepath : string) : (Compiler.t * Machine.t) option =
-  filepath |> parse |> compile |> eval
+let run (filepath : string) : Machine.t option =
+  filepath |> parse |> compile |> eval |> Option.map snd
 
 let load' filter_fn (filepath : string) : Compiler.t * Machine.t =
   filepath |> parse |> List.filter filter_fn |> compile
