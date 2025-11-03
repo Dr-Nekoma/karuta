@@ -33,24 +33,23 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 open React
 open Lwt
 open LTerm_text
-  
+
 (* A simple model of an interpreter. It maintains some state, and exposes a function
  *   eval : state -> input -> (new_state, output) *)
 module Interpreter = struct
   type state = (Compiler.t * Machine.t) option
-  
+
   let initial_state = None
-  
+
   (* Check if command is complete (ends with semicolon, or is a meta-command) *)
   let is_complete cmd =
     let trimmed = String.trim cmd in
-    String.length trimmed > 0 &&
-    (trimmed.[0] = '\\' || String.ends_with ~suffix:"?" trimmed)
+    String.length trimmed > 0
+    && (trimmed.[0] = '\\' || String.ends_with ~suffix:"?" trimmed)
 
   let eval state s =
     let trimmed = String.trim s in
-    if String.length trimmed = 0 then
-      (state, "")
+    if String.length trimmed = 0 then (state, "")
     else if trimmed.[0] = '\\' then
       (* Meta-command *)
       if trimmed = "\\q" then failwith "Exit! 💣💥"
@@ -58,80 +57,69 @@ module Interpreter = struct
     else
       match Utils.run trimmed state with
       | Some (_, computer) as new_state ->
-         (new_state, Crawler.Tabulation.query_args computer)
-      | None ->
-         (state, "")
+          (new_state, Crawler.Tabulation.query_args computer)
+      | None -> (state, "")
 end
 
 (* Create a prompt based on the current interpreter state *)
 let make_prompt _state _buffer_empty =
-  let prompt = "karuta>" in
-  eval [B_bold true; S prompt; E_bold]
+  let prompt = "karuta> " in
+  eval [ B_bold true; S prompt; E_bold ]
 
 (* Format the interpreter output for REPL display *)
-let make_output out =
-  if String.length out > 0 then
-    eval [S out]
-  else
-    eval []
+let make_output out = if String.length out > 0 then eval [ S out ] else eval []
 
-class read_line ~term ~history ~state ~buffer_empty = object(self)
-  inherit LTerm_read_line.read_line ~history ()
-  inherit [Zed_string.t] LTerm_read_line.term term
-  
-  method! show_box = false
-  
-  initializer
-    self#set_prompt (S.const (make_prompt state buffer_empty))
-end
+class read_line ~term ~history ~state ~buffer_empty =
+  object (self)
+    inherit LTerm_read_line.read_line ~history ()
+    inherit [Zed_string.t] LTerm_read_line.term term
+    method! show_box = false
+    initializer self#set_prompt (S.const (make_prompt state buffer_empty))
+  end
 
 let rec loop term history state buffer =
   let buffer_empty = String.length buffer = 0 in
-  
-  Lwt.catch (fun () ->
-    let rl = new read_line ~term ~history:(LTerm_history.contents history) 
-                          ~state ~buffer_empty in
-    rl#run >|= fun command -> Some command)
-    (function
-      | Sys.Break -> return None
-      | exn -> Lwt.fail exn)
+
+  Lwt.catch
+    (fun () ->
+      let rl =
+        new read_line
+          ~term
+          ~history:(LTerm_history.contents history)
+          ~state ~buffer_empty
+      in
+      rl#run >|= fun command -> Some command)
+    (function Sys.Break -> return None | exn -> Lwt.fail exn)
   >>= function
   | Some command ->
       let line = Zed_string.to_utf8 command in
-      let new_buffer = 
-        if String.length buffer = 0 then line
-        else buffer ^ "\n" ^ line
+      let new_buffer =
+        if String.length buffer = 0 then line else buffer ^ "\n" ^ line
       in
-      
-      if Interpreter.is_complete new_buffer then begin
+
+      if Interpreter.is_complete new_buffer then
         (* Execute complete command *)
-        Lwt.catch (fun () ->
-          let new_state, out = Interpreter.eval state new_buffer in
-          LTerm.fprintls term (make_output out)
-          >>= fun () ->
-          if String.length new_buffer > 0 && new_buffer.[0] <> '\\' then
-            LTerm_history.add history command;
-          loop term history new_state ""
-        ) (function
-          | Exit -> Lwt.return ()
-          | exn -> Lwt.fail exn)
-      end else begin
+        Lwt.catch
+          (fun () ->
+            let new_state, out = Interpreter.eval state new_buffer in
+            LTerm.fprintls term (make_output out) >>= fun () ->
+            if String.length new_buffer > 0 && new_buffer.[0] <> '\\' then
+              LTerm_history.add history command;
+            loop term history new_state "")
+          (function Exit -> Lwt.return () | exn -> Lwt.fail exn)
+      else
         (* Continue building multi-line command *)
         loop term history state new_buffer
-      end
-  | None ->
-      loop term history state buffer
+  | None -> loop term history state buffer
 
 let program_loader term () =
   loop term (LTerm_history.create []) (Utils.load "examples/lists.krt") ""
 
 let main () =
-  LTerm_inputrc.load ()
-  >>= fun () ->
-  Lwt.catch (fun () ->
-    Lazy.force LTerm.stdout
-    >>= fun term ->
-    LTerm.fprintls term (eval [S "Karuta REPL\n"])
-    >>= program_loader term ) (function
-      | LTerm_read_line.Interrupt -> Lwt.return ()
-      | exn -> Lwt.fail exn)
+  LTerm_inputrc.load () >>= fun () ->
+  Lwt.catch
+    (fun () ->
+      Lazy.force LTerm.stdout >>= fun term ->
+      LTerm.fprintls term (eval [ S "Karuta REPL\n" ]) >>= program_loader term)
+    (function
+      | LTerm_read_line.Interrupt -> Lwt.return () | exn -> Lwt.fail exn)
