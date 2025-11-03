@@ -63,13 +63,13 @@ let load_many_decls : string list -> (Compiler.t * Machine.t) option = function
       let get_decls filepath =
         filepath |> parse
         |> List.filter Ast.ParserClause.is_decl
-        |> BatSet.of_list
+        |> BatFingerTree.of_list
       in
       fs
       |> List.fold_left
-           (fun acc f' -> BatSet.union acc @@ get_decls f')
+           (fun acc f' -> BatFingerTree.append acc @@ get_decls f')
            (get_decls f)
-      |> BatSet.to_list |> compile |> Option.some
+      |> BatFingerTree.to_list |> compile |> Option.some
 
 let continue content compiler_and_computer : (Compiler.t * Machine.t) option =
   match (Parse.parse content, compiler_and_computer) with
