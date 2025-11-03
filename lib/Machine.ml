@@ -29,7 +29,7 @@ module Cell = struct
     | Halt
     | QueryVariable of (register * string)
     | Builtin of builtin
-   [@@deriving show]
+  [@@deriving show]
 
   and builtin =
     | IsInteger

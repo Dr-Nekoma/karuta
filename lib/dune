@@ -10,7 +10,14 @@
 
 (library
  (name lib)
- (libraries batteries sexplib lwt lwt.unix lwt-exit lambda-term textutils.ascii_table)
+ (libraries
+  batteries
+  sexplib
+  lwt
+  lwt.unix
+  lwt-exit
+  lambda-term
+  textutils.ascii_table)
  (package karuta)
  (preprocess
   (pps
