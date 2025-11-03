@@ -1,10 +1,6 @@
 let bimap f g (a1, a2) = (f a1, g a2)
 let flip f x y = f y x
 
-let update_store (computer : Machine.t) (store : Machine.Cell.t Machine.Store.t)
-    : Machine.t =
-  { computer with store }
-
 module List = struct
   let to_option : 'a list -> 'a list option = function
     | [] -> None
@@ -15,21 +11,14 @@ module List = struct
   let fold_left = List.fold_left
 end
 
-let verify_parsed filepath : Ast.parser_clause list -> Ast.parser_clause list =
-  function
-  | [] ->
-      print_endline @@ "Could not parse: " ^ filepath;
-      []
-  | clauses -> clauses
-
 let parse (filepath : string) : Ast.parser_clause list =
   let get_input fc =
     try Some (In_channel.input_all fc) with End_of_file -> None
   in
   filepath
   |> flip In_channel.with_open_text get_input
-  |> flip Option.bind (Fun.compose List.to_option Parse.parse)
-  |> Option.to_list |> List.flatten |> verify_parsed filepath
+  |> Option.map Parse.parse |> Option.to_list |> List.flatten
+  |> Parse.verify filepath
 
 module Option = struct
   let ( let+ ) = Option.bind
@@ -44,7 +33,7 @@ let compile' ((compiler, computer) : Compiler.t * Machine.t) :
   | decls_queries ->
       (Preprocessor.group_clauses decls_queries, compiler, computer.store)
       |> Compiler.compile
-      |> bimap Fun.id (update_store computer)
+      |> bimap Fun.id (Machine.update_store computer)
 
 let compile = compile' (Compiler.initialize (), Machine.initialize ())
 
