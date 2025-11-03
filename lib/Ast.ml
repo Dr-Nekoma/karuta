@@ -1,7 +1,7 @@
-type tag = string [@@deriving show, ord]
+type tag = string [@@deriving show, ord, eq]
 
 type expr = Variable of var | Functor of func | Integer of int
-[@@deriving show, ord]
+[@@deriving show, ord, eq]
 
 and clause = MultiDeclaration of (decl * decl list) | Query of func
 [@@deriving show, ord]
@@ -12,7 +12,7 @@ and parser_clause = Declaration of decl | QueryConjunction of func list
 and var = { namev : tag } [@@deriving show, ord]
 
 and func = { namef : tag; elements : expr list; arity : int }
-[@@deriving show, ord]
+[@@deriving show, ord, eq]
 
 and decl = { head : func; body : func list } [@@deriving show, ord]
 

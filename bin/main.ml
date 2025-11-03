@@ -1,39 +1,80 @@
 open Cmdliner
 
-(* Command: --repl *)
-let repl_term =
-  let doc = "Start the interactive REPL." in
-  Arg.(value & flag & info [ "repl" ] ~doc)
+module Repl = struct
+  type t = { files : string list }
 
-(* Command: --compile FILE *)
-let compile_term =
-  let doc = "Compile a Karuta source file." in
-  let file =
-    Arg.(value & opt (some string) None & info [ "compile" ] ~docv:"FILE" ~doc)
-  in
-  file
+  let file_term =
+    let info =
+      Arg.info [] ~doc:"List of optional Karuta source files."
+        ~docv:"[FILE.krt]"
+    in
+    Arg.value (Arg.pos_all Arg.string [] info)
 
-(* Map arguments to behavior *)
-let main repl_flag compile_opt =
-  match (repl_flag, compile_opt) with
-  | true, None ->
-      Lwt_main.run (Lib.REPL.main ());
-      `Ok ()
-  | false, Some file -> (
+  let doc =
+    "Start the interactive REPL with optional list of Karuta source files"
+
+  let man = [ `S Manpage.s_description; `P "Start the interactive REPL." ]
+  let term combine = Term.(const combine $ file_term)
+
+  let cmd combine =
+    let info = Cmd.info "repl" ~doc ~man in
+    Cmd.v info (term combine)
+end
+
+module Compile = struct
+  type t = { file : string }
+
+  let file_term =
+    let info =
+      Arg.info [] ~doc:"Mandatory Karuta source file." ~docv:"FILE.krt"
+    in
+    Arg.required (Arg.pos 0 (Arg.some Arg.file) None info)
+
+  let doc = "Compile a Karuta source file"
+  let man = [ `S Manpage.s_description; `P "Compile a Karuta source file." ]
+  let term combine = Term.(const combine $ file_term)
+
+  let cmd combine =
+    let info = Cmd.info "compile" ~doc ~man in
+    Cmd.v info (term combine)
+end
+
+type cmd = Repl of Repl.t | Compile of Compile.t
+
+let repl run =
+  let combine files = Repl { files } |> run in
+  Repl.cmd combine
+
+let compile run =
+  let combine file = Compile { file } |> run in
+  Compile.cmd combine
+
+let root_doc = "Welcome to Karuta!"
+
+let root_man =
+  [
+    `S Manpage.s_description;
+    `P "A relational programming language for both applications and databases!";
+  ]
+
+let root_term = Term.ret (Term.const (`Help (`Pager, None)))
+let root_info = Cmd.info "karuta" ~doc:root_doc ~man:root_man
+
+let help =
+  let info = Cmd.info "help" in
+  Cmd.v info root_term
+
+let subcommands run = [ repl run; compile run; help ]
+
+let parse_command_line_and_run (run : cmd -> unit) =
+  run |> subcommands |> Cmd.group root_info |> Cmd.eval
+
+let run : cmd -> unit = function
+  | Repl { files } -> Lwt_main.run (Lib.REPL.main files)
+  | Compile { file } -> (
       match Lib.Executor.run file with
       | None -> failwith @@ "Could not execute file: " ^ file
       | Some (_, computer) ->
-          print_endline @@ Lib.Crawler.StandardOut.query_string computer;
-          `Ok ())
-  | true, Some _ ->
-      `Error (false, "Options --repl and --compile cannot be used together.")
-  | false, None ->
-      `Error (false, "No command given. Try --repl or --compile <file>.")
+          print_endline @@ Lib.Crawler.StandardOut.query_string computer)
 
-let cmd =
-  let open Cmdliner in
-  let term = Term.(ret (const main $ repl_term $ compile_term)) in
-  let info = Cmd.info "karuta" ~version:"0.1.0" ~doc:"Karuta CLI" in
-  Cmd.v info term
-
-let () = exit (Cmd.eval cmd)
+let () = exit @@ parse_command_line_and_run run

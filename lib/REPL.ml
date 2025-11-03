@@ -52,7 +52,7 @@ module Interpreter = struct
     if String.length trimmed = 0 then (state, "")
     else if trimmed.[0] = '\\' then
       (* Meta-command *)
-      if trimmed = "\\q" then failwith "Exit! 💣💥"
+      if trimmed = "\\q" then raise Exit
       else (state, "Executed meta-command: " ^ trimmed)
     else
       match Executor.continue trimmed state with
@@ -112,16 +112,15 @@ let rec loop term history state buffer =
         loop term history state new_buffer
   | None -> loop term history state buffer
 
-let program_loader term () =
-  loop term (LTerm_history.create [])
-    (Some (Executor.load_decls "examples/lists.krt"))
-    ""
+let program_loader term files () =
+  loop term (LTerm_history.create []) (Executor.load_many_decls files) ""
 
-let main () =
+let main (files : string list) =
   LTerm_inputrc.load () >>= fun () ->
   Lwt.catch
     (fun () ->
       Lazy.force LTerm.stdout >>= fun term ->
-      LTerm.fprintls term (eval [ S "Karuta REPL\n" ]) >>= program_loader term)
+      LTerm.fprintls term (eval [ S "Karuta REPL\n" ])
+      >>= program_loader term files)
     (function
       | LTerm_read_line.Interrupt -> Lwt.return () | exn -> Lwt.fail exn)

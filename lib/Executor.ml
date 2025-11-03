@@ -12,6 +12,7 @@ module List = struct
 
   let flatten = List.flatten
   let filter = List.filter
+  let fold_left = List.fold_left
 end
 
 let verify_parsed filepath : Ast.parser_clause list -> Ast.parser_clause list =
@@ -32,6 +33,7 @@ let parse (filepath : string) : Ast.parser_clause list =
 
 module Option = struct
   let ( let+ ) = Option.bind
+  let some = Option.some
 end
 
 let compile' ((compiler, computer) : Compiler.t * Machine.t) :
@@ -65,11 +67,25 @@ let load' filter_fn (filepath : string) : Compiler.t * Machine.t =
 let load = load' (Fun.const true)
 let load_decls = load' Ast.ParserClause.is_decl
 
+let load_many_decls : string list -> (Compiler.t * Machine.t) option = function
+  | [] -> None
+  | f :: fs ->
+      let get_decls filepath =
+        filepath |> parse
+        |> List.filter Ast.ParserClause.is_decl
+        |> BatSet.of_list
+      in
+      fs
+      |> List.fold_left
+           (fun acc f' -> BatSet.union acc @@ get_decls f')
+           (get_decls f)
+      |> BatSet.to_list |> compile |> Option.some
+
 let continue content compiler_and_computer : (Compiler.t * Machine.t) option =
   match (Parse.parse content, compiler_and_computer) with
   | [], _ ->
       print_endline ("Parser error. Incorrect definition: " ^ content);
       None
   | decls_queries, Some (current_compiler, current_computer) ->
-      decls_queries |> compile' (current_compiler, current_computer) |> eval
+      decls_queries |> compile' ({current_compiler with entry_point = None}, current_computer) |> eval
   | decls_queries, None -> decls_queries |> compile |> eval
