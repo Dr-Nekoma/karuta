@@ -24,6 +24,9 @@ end
 
 module ParserClause = struct
   type t = parser_clause [@@deriving show, ord]
+  let is_decl: t -> bool = function
+    | Declaration _ -> true
+    | _ -> false
 end
 
 module Expr = struct

@@ -11,6 +11,7 @@ module List = struct
     | other -> Some other
 
   let flatten = List.flatten
+  let filter = List.filter
 end
 
 let verify_parsed filepath : Ast.parser_clause list -> Ast.parser_clause list =
@@ -58,11 +59,14 @@ let eval ((compiler, computer) : Compiler.t * Machine.t) :
 let run (filepath : string) : (Compiler.t * Machine.t) option =
   filepath |> parse |> compile |> eval
 
-let load (filepath : string) : Compiler.t * Machine.t =
-  filepath |> parse |> compile
+let load' filter_fn (filepath : string) : Compiler.t * Machine.t =
+  filepath |> parse |> List.filter filter_fn |> compile
+
+let load = load' (Fun.const true)
+let load_decls = load' Ast.ParserClause.is_decl
 
 let continue content compiler_and_computer : (Compiler.t * Machine.t) option =
-  match (parse content, compiler_and_computer) with
+  match (Parse.parse content, compiler_and_computer) with
   | [], _ ->
       print_endline ("Parser error. Incorrect definition: " ^ content);
       None

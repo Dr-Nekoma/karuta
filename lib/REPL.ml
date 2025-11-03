@@ -41,7 +41,7 @@ module Interpreter = struct
 
   let initial_state = None
 
-  (* Check if command is complete (ends with semicolon, or is a meta-command) *)
+  (* Check if command is complete (ends with question mark, or is a meta-command) *)
   let is_complete cmd =
     let trimmed = String.trim cmd in
     String.length trimmed > 0
@@ -55,7 +55,7 @@ module Interpreter = struct
       if trimmed = "\\q" then failwith "Exit! 💣💥"
       else (state, "Executed meta-command: " ^ trimmed)
     else
-      match Utils.run trimmed state with
+      match Executor.continue trimmed state with
       | Some (_, computer) as new_state ->
           (new_state, Crawler.Tabulation.query_args computer)
       | None -> (state, "")
@@ -113,7 +113,7 @@ let rec loop term history state buffer =
   | None -> loop term history state buffer
 
 let program_loader term () =
-  loop term (LTerm_history.create []) (Utils.load "examples/lists.krt") ""
+  loop term (LTerm_history.create []) (Some (Executor.load_decls "examples/lists.krt")) ""
 
 let main () =
   LTerm_inputrc.load () >>= fun () ->
