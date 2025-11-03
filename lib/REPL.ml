@@ -57,7 +57,7 @@ module Interpreter = struct
     else
       match Executor.continue trimmed state with
       | Some (_, computer) as new_state ->
-          (new_state, Crawler.Tabulation.query_args computer)
+          (new_state, Crawler.Tabulation.query_string computer)
       | None -> (state, "")
 end
 
@@ -113,7 +113,9 @@ let rec loop term history state buffer =
   | None -> loop term history state buffer
 
 let program_loader term () =
-  loop term (LTerm_history.create []) (Some (Executor.load_decls "examples/lists.krt")) ""
+  loop term (LTerm_history.create [])
+    (Some (Executor.load_decls "examples/lists.krt"))
+    ""
 
 let main () =
   LTerm_inputrc.load () >>= fun () ->

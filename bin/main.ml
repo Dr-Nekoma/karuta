@@ -23,7 +23,7 @@ let main repl_flag compile_opt =
       match Lib.Executor.run file with
       | None -> failwith @@ "Could not execute file: " ^ file
       | Some (_, computer) ->
-          print_endline @@ Lib.Crawler.StandardOut.query_args computer;
+          print_endline @@ Lib.Crawler.StandardOut.query_string computer;
           `Ok ())
   | true, Some _ ->
       `Error (false, "Options --repl and --compile cannot be used together.")
