@@ -119,8 +119,5 @@ module Tabulation : Crawler = struct
     Ascii_table.to_string ~header_attr:[ `Magenta ] ~bars:`Unicode columns
     @@ List.of_seq vars
 
-  let query_args ({ store; query_variables; _ } : Machine.t) :
-      Query.variable_map =
-    let mapper cell = String.concat ", " @@ inspect store cell in
-    BatMap.map mapper query_variables
+  let query_args: Machine.t -> Query.variable_map = fun _ -> failwith "query_args is not implemented for Tabulation"
 end
