@@ -60,9 +60,10 @@ let continue content compiler_and_computer : (Compiler.t * Machine.t) option =
   | [], _ ->
       print_endline ("Parser error. Incorrect definition: " ^ content);
       None
-  | decls_queries, Some (current_compiler, current_computer) ->
+  | decls_queries, Some (compiler, computer) ->
       decls_queries
       |> compile'
-           ({ current_compiler with entry_point = None }, current_computer)
+           ( { compiler with entry_point = None },
+             { computer with query_variables = BatMap.empty } )
       |> eval
   | decls_queries, None -> decls_queries |> compile |> eval
