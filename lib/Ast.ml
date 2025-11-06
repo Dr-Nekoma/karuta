@@ -36,4 +36,6 @@ end
 
 module Expr = struct
   type t = expr [@@deriving show, ord]
+
+  let is_functor : t -> bool = function Functor _ -> true | _ -> false
 end
