@@ -20,12 +20,6 @@ let parse (filepath : string) : Ast.parser_clause list =
   |> Option.map Parse.parse |> Option.to_list |> List.flatten
   |> Parse.verify filepath
 
-module Option = struct
-  let ( let+ ) = Option.bind
-  let some = Option.some
-  let map = Option.map
-end
-
 let compile' ((compiler, computer) : Compiler.t * Machine.t) :
     Ast.parser_clause list -> Compiler.t * Machine.t = function
   | [] ->
