@@ -1,16 +1,6 @@
 let bimap f g (a1, a2) = (f a1, g a2)
 let flip f x y = f y x
 
-module List = struct
-  let to_option : 'a list -> 'a list option = function
-    | [] -> None
-    | other -> Some other
-
-  let flatten = List.flatten
-  let filter = List.filter
-  let fold_left = List.fold_left
-end
-
 let parse (filepath : string) : Ast.parser_clause list =
   let get_input fc =
     try Some (In_channel.input_all fc) with End_of_file -> None
